@@ -23,9 +23,10 @@ class TrackerPlotCxt:
         self.tracker_scatter_list = []
         self.track_list = []
         self.traj_plots = []
+        self.tsp_plots = []
 
 def generate_triangle_pts(t):
-    r = 1
+    r = 2
     ang1 = t.orientation[2] + t.params.information_angle + t.params.information_tolerance
     ang2 = t.orientation[2] + t.params.information_angle - t.params.information_tolerance / 2.0
 
@@ -54,6 +55,9 @@ def initial_plot_tracker_group(ax, trackers):
         l3 = ax.plot(xs, ys, color='g')[0]
         cxt.traj_plots.append(l3)
 
+        l4 = ax.plot(xs, ys, color='c', alpha=0.2)[0]
+        cxt.tsp_plots.append(l4)
+
     return cxt
 
 def initial_plot_target_group(ax, group):
@@ -64,7 +68,7 @@ def initial_plot_target_group(ax, group):
         cxt.target_scatter_list.append(l)
 
         tri_corners = generate_triangle_pts(t)
-        patch = patches.Polygon(tri_corners, closed=True, fc='r', ec='r')
+        patch = patches.Polygon(tri_corners, closed=True, fc='r', ec='r', alpha=0.2)
         ax.add_patch(patch)
         cxt.target_fov_list.append(patch)
     ax.set_xlim([-10,10])
@@ -72,7 +76,7 @@ def initial_plot_target_group(ax, group):
 
     return cxt
 
-def update_plot_tracker_group(group, trajectories, index_asgn, targets, cxt):
+def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp, cxt):
     for (ix, t) in enumerate(group.agent_list):
         cxt.tracker_scatter_list[ix].set_offsets(t.position[:-1])
 
@@ -87,6 +91,10 @@ def update_plot_tracker_group(group, trajectories, index_asgn, targets, cxt):
         xs = vars_2d[1:,0]
         ys = vars_2d[1:,1]
         cxt.traj_plots[ix].set_data(xs, ys)
+
+        xs = tsp[:, 0]
+        ys = tsp[:, 1]
+        cxt.tsp_plots[ix].set_data(xs, ys)
 
 def update_plot_target_group(group, cxt):
     for (ix, t) in enumerate(group.agent_list):

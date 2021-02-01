@@ -30,7 +30,7 @@ def generate_collocation_functions(n_states, n_controls):
 
 
 # defining loss function -- want to be in desired cone
-#target_prediction = cd.MX.sym('target_pred', 3*40)
+target_prediction = cd.MX.sym('target_pred', 3*40)
 target_state = cd.MX.sym('target', 3)
 #target_state = target_prediction[:3]
 tracker_state = cd.MX.sym('tracker_state', 5)
@@ -57,7 +57,7 @@ next_target_state = cd.MX.sym('target', 3)
 x_diff_terminal = tracker_state[:2] - next_target_state[:2]
 x_diff_heading_terminal = x_diff_terminal / cd.norm_2(x_diff_terminal)
 
-target_heading_terminal = cd.vertcat(cd.cos(target_state[2]), cd.sin(next_target_state[2]))
+target_heading_terminal = cd.vertcat(cd.cos(next_target_state[2]), cd.sin(next_target_state[2]))
 
 cos_theta_terminal = cd.dot(x_diff_heading_terminal, target_heading_terminal)
 
@@ -102,7 +102,7 @@ w0 += [.1, .1]
 
 
 for k in range(N):
-    loss += target_1_weights[k] * l(target_state, Xk, Uk)
+    loss += target_1_weights[k] * l(target_prediction[3*k:3*k+3], Xk, Uk)
     loss += target_2_weights[k] * l(next_target_state, Xk, Uk)
     
     Xk_next = cd.MX.sym('X' + str(k+1), 5)
@@ -133,7 +133,7 @@ for k in range(N):
 
 loss += l_terminal(next_target_state, Xk)
 
-prob = {'f': loss, 'x': cd.vertcat(*w), 'g': cd.vertcat(*g), 'p': cd.vertcat(X0_sym, target_state, next_target_state, target_1_weights, target_2_weights)}
+prob = {'f': loss, 'x': cd.vertcat(*w), 'g': cd.vertcat(*g), 'p': cd.vertcat(X0_sym, target_prediction, next_target_state, target_1_weights, target_2_weights)}
 solver = cd.nlpsol('solver', 'ipopt', prob)
 
 target_position = 0
@@ -142,7 +142,14 @@ weights_1 = cd.DM.zeros(40)
 weights_1[:20] = 1
 weights_2 = cd.DM.zeros(40)
 weights_2[20:] = 1
-sol = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg, p=cd.vertcat(-1, -1, 0, 0, 0, 3,3,0, -1, 1, 0, weights_1, weights_2))
+
+target_prediction = cd.DM.zeros(3*40)
+for k in range(40):
+    target_prediction[3*k] = 3
+    target_prediction[3*k + 1] = 3
+    target_prediction[3*k + 2] = 0
+
+sol = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg, p=cd.vertcat(-1, -1, 0, 0, 0, target_prediction, -1, 1, 0, weights_1, weights_2))
 w_opt = sol['x']
 
 x = []

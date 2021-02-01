@@ -5,9 +5,20 @@
 scratch todo
 ------------
 
-[ ] prediction
-[ ] distance
-[ ] constraint
+[x] prediction
+[x] distance
+[x] TSP high level plan
+    [x] write distance matrix to file
+    [x] call pytsp
+    [x] draw tsp
+[ ] shot order ILP
+[ ] multi-tracker (naive division)
+
+At that point, have a simple proof of concept of the full stack.
+will need to:
+1) improve high level assignment
+2) investigate swaps
+3) port to drone sim (?)
 
 Implementation Phases
 =====================
@@ -20,8 +31,8 @@ The first part of the implementation is a simple environment baseline.
 
 [x] simple high level plan
 [x] mpc terminal cost
-[ ] target prediction
-[ ] distance constraint
+[x] target prediction
+[x] distance constraint
 [ ] casadi Map
 [ ] code cleanup / function docs
 
@@ -32,10 +43,9 @@ Solve the Tricky Pieces
 This is where the kernel of innovation is. We need to constrain the tracker to
 enter the desired regions, and implement a smart high level plan.
 
-[-] viewpoint constraint
+[x] viewpoint constraint
     * compare hard constraint vs "lyapunov" version
     * consider alyssa's point about optimal boundary position
-    * found a better way to do it, but still need to add *constraint*
 [ ] real high level plan
 
 

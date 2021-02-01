@@ -2,3 +2,9 @@
 *.swp
 *.c
 *.so
+*.tsp
+*.res
+*.sol
+*.mp4
+costmap_test.py
+
