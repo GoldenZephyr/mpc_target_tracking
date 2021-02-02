@@ -5,6 +5,7 @@ import matplotlib.animation as animation
 import numpy as np
 
 import casadi as cd
+from ilp import generate_assignments
 
 #from targets import TargetGroup
 from agents import AgentGroup, DefaultTargetParams, DefaultTrackerParams
@@ -16,9 +17,9 @@ from dynamics import update_targets, step
 
 solver_comp = cd.nlpsol('solver', 'ipopt', './nlp.so', {'print_time':0, 'ipopt.print_level' : 0, 'ipopt.max_cpu_time': 0.08})
 
-
-#targets = TargetGroup(20, [-5,-5,-5], [5,5,5])
-targets = AgentGroup(20, [-5,-5,-5], [5,5,5], DefaultTargetParams())
+n_targets = 20
+#targets = TargetGroup(n_targets, [-5,-5,-5], [5,5,5])
+targets = AgentGroup(n_targets, [-5,-5,-5], [5,5,5], DefaultTargetParams())
 trackers = AgentGroup(1, [-5,-5,-5,], [5,5,5], DefaultTrackerParams())
 
 #plt.ion()
@@ -96,21 +97,44 @@ weights_1 = cd.DM.ones(40)
 weights_2 = cd.DM.zeros(40)
 #weights_2[20:] = 1
 
-need_visit_list = [True] * 20
+need_visit_list = [True] * n_targets
 
-#for ix in range(1000):
+use_tsp = False
+use_knn = True
 def update(i):
     global current_target_ix, w0, switch_ix
 
+    ix_map = np.arange(n_targets)[need_visit_list]
+    if not use_tsp:
+        if use_knn:
+            positions_to_visit = targets.unicycle_state[need_visit_list, :2] 
+            tracker_position = trackers.agent_list[0].state[:2]
+            deltas = positions_to_visit - tracker_position
+            distances = np.linalg.norm(deltas, axis=1)
+            k = 10
+            k_closest_ix = np.argsort(distances)[:k]
+            knn_map = np.arange(len(ix_map))[k_closest_ix]
+            target_positions = targets.unicycle_state[ix_map[k_closest_ix]]
+        else:
+            target_positions = targets.unicycle_state[need_visit_list]
+            knn_map = np.arange(len(target_positions))
+        (path_assignments, path_positions) = generate_assignments(target_positions, targets.agent_list[0].params, trackers.agent_list[0].state[:2])
+        current_target_ix = ix_map[knn_map[path_assignments[0]]]
+        if len(path_assignments) > 1:
+            next_target_ix = ix_map[knn_map[path_assignments[1]]]
+        else:
+            next_target_ix = ix_map[knn_map[path_assignments[0]]]
 
     remaining_target_positions = targets.pose[need_visit_list,:2]
-    ix_map = np.arange(20)[need_visit_list]
-    tsp_sol = solve_tsp(remaining_target_positions, trackers.agent_list[0].state[:2], 'tracker_1_tsp.tsp')
-    current_target_ix = ix_map[tsp_sol[0]]
-    if len(tsp_sol) > 1:
-        next_target_ix = ix_map[tsp_sol[1]]
-    else:
-        next_target_ix = ix_map[tsp_sol[0]]
+    if use_tsp:
+        tsp_sol = solve_tsp(remaining_target_positions, trackers.agent_list[0].state[:2], 'tracker_1_tsp.tsp')
+        current_target_ix = ix_map[tsp_sol[0]]
+
+        if len(tsp_sol) > 1:
+            next_target_ix = ix_map[tsp_sol[1]]
+        else:
+            next_target_ix = ix_map[tsp_sol[0]]
+
 
     move_on = check_view(trackers, targets, current_target_ix) 
 
@@ -142,7 +166,10 @@ def update(i):
         t.angular_acceleration[0] = 3 * (np.random.random() - 0.5)
     targets.synchronize_state()
     update_plot_target_group(targets, scats)
-    update_plot_tracker_group(trackers, trajectories, [current_target_ix], targets, targets.pose[ix_map[tsp_sol], :2], scats_tracker)
+    if use_tsp:
+        update_plot_tracker_group(trackers, trajectories, [current_target_ix], targets, targets.pose[ix_map[tsp_sol], :2], scats_tracker)
+    else:
+        update_plot_tracker_group(trackers, trajectories, [current_target_ix], targets, targets.pose[ix_map[knn_map[path_assignments]], :2], scats_tracker)
     #update_plot_tracker_group(trackers, trajectories, [current_target_ix], targets, targets.pose[current_target_ix + 1, :2], scats_tracker)
     #fig.canvas.draw_idle()
     #plt.pause(.05)
@@ -152,7 +179,8 @@ def update(i):
 
 Writer = animation.writers['ffmpeg']
 writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
-ani = animation.FuncAnimation(fig, update, range(1, 2000), interval=150, blit=True)
-ani.save('im.mp4', writer=writer)
+ani = animation.FuncAnimation(fig, update, range(1, 2000), interval=100, blit=True)
+#plt.show()
+ani.save('videos/ilp_knn3.mp4', writer=writer)
 #plt.show()
 #plt.waitforbuttonpress()

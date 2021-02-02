@@ -11,7 +11,21 @@ scratch todo
     [x] write distance matrix to file
     [x] call pytsp
     [x] draw tsp
-[ ] shot order ILP
+[x] shot order ILP
+    [x] roll out predictions
+    [x] uniform random sampling of times
+    [x] build ilp -- clip based on expected distance
+    [x] solve + unroll assignment
+    [x] redo/reorder dummy variables in DAG
+    [x] put the pieces together
+    [x] demo with static agents
+    [x] plot test case
+[x] Video baselines
+    [x] TSP video
+    [x] ILP video
+    [x] ILP with KNN limitation
+[-] periodic revisiting
+    * on hold for now -- is this really worth doing?
 [ ] multi-tracker (naive division)
 
 At that point, have a simple proof of concept of the full stack.
@@ -46,7 +60,7 @@ enter the desired regions, and implement a smart high level plan.
 [x] viewpoint constraint
     * compare hard constraint vs "lyapunov" version
     * consider alyssa's point about optimal boundary position
-[ ] real high level plan
+[x] real high level plan
 
 
 
