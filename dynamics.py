@@ -4,8 +4,8 @@ import numpy as np
 import casadi as cd
 
 
-def update_targets(targets, dt):
-    for t in targets.agent_list:
+def update_agents(agents, dt):
+    for t in agents.agent_list:
         state_new = step(t.unicycle_state, t.control, t.params, dt)
         t.unicycle_state[:] = state_new
 

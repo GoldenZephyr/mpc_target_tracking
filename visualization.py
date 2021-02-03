@@ -76,7 +76,7 @@ def initial_plot_target_group(ax, group):
 
     return cxt
 
-def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp, cxt):
+def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp_order, cxt):
     for (ix, t) in enumerate(group.agent_list):
         cxt.tracker_scatter_list[ix].set_offsets(t.position[:-1])
 
@@ -92,8 +92,9 @@ def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp, cxt
         ys = vars_2d[1:,1]
         cxt.traj_plots[ix].set_data(xs, ys)
 
-        xs = tsp[:, 0]
-        ys = tsp[:, 1]
+        tsp_pos = targets.pose[tsp_order[ix], :2]
+        xs = tsp_pos[:, 0]
+        ys = tsp_pos[:, 1]
         cxt.tsp_plots[ix].set_data(xs, ys)
 
 def update_plot_target_group(group, cxt):

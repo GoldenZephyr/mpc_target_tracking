@@ -9,6 +9,7 @@ class DefaultTrackerParams:
         self.max_velocity = np.array([3])
         self.min_angular_velocity = np.array([-3])
         self.max_angular_velocity = np.array([3])
+        self.switch_ix = 39
 
 class DefaultTargetParams:
     def __init__(self):
@@ -20,7 +21,8 @@ class DefaultTargetParams:
         self.information_tolerance = np.radians(30)
 
 class Agent:
-    def __init__(self, state, unicycle_state, control, agent_params):
+    def __init__(self, state, unicycle_state, control, agent_params, ix):
+        self.index = ix
         self.state = state
         self.unicycle_state = unicycle_state
 
@@ -86,7 +88,7 @@ class AgentGroup:
         # Construct list of individual agent objects that share the same underlying representation
         self.agent_list = [0] * n
         for ix in range(n):
-            self.agent_list[ix] = Agent(self.state[ix,:], self.unicycle_state[ix, :], self.unicycle_control[ix,:], agent_params)
+            self.agent_list[ix] = Agent(self.state[ix,:], self.unicycle_state[ix, :], self.unicycle_control[ix,:], agent_params, ix)
 
     def synchronize_state(self):
         """ Updates the 12 DOF state to reflect the unicycle state
