@@ -80,16 +80,23 @@ def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp_orde
     for (ix, t) in enumerate(group.agent_list):
         cxt.tracker_scatter_list[ix].set_offsets(t.position[:-1])
 
-        target_position = targets.agent_list[index_asgn[ix]].position[:2]
+        if index_asgn[ix] is None:
+            target_position = t.position[:2]
+        else:
+            target_position = targets.agent_list[index_asgn[ix]].position[:2]
         tracker_position = t.position[:2]
         xs = [tracker_position[0], target_position[0]]
         ys = [tracker_position[1], target_position[1]]
         cxt.track_list[ix].set_data(xs, ys)
 
-        vars = np.hstack([np.zeros(5), np.array(trajectories[ix]).flatten()])
-        vars_2d = np.reshape(vars, (41,7))
-        xs = vars_2d[1:,0]
-        ys = vars_2d[1:,1]
+        if index_asgn[ix] is None:
+            xs = [t.position[0]]
+            ys = [t.position[1]]
+        else:
+            vars = np.hstack([np.zeros(5), np.array(trajectories[ix]).flatten()])
+            vars_2d = np.reshape(vars, (41,7))
+            xs = vars_2d[1:,0]
+            ys = vars_2d[1:,1]
         cxt.traj_plots[ix].set_data(xs, ys)
 
         tsp_pos = targets.pose[tsp_order[ix], :2]

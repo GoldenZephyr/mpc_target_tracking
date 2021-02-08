@@ -24,9 +24,10 @@ scratch todo
     [x] TSP video
     [x] ILP video
     [x] ILP with KNN limitation
-[-] periodic revisiting
-    * on hold for now -- is this really worth doing?
-[ ] multi-tracker (naive division)
+[x] multi-tracker (naive division)
+[x] polish so it works all the way through
+[ ] record metrics about how long it takes
+[ ] simple additions to reduce assignment instability
 
 At that point, have a simple proof of concept of the full stack.
 will need to:
@@ -67,7 +68,7 @@ enter the desired regions, and implement a smart high level plan.
 Multiagent Functionality
 ------------------------
 
-[ ] Dividing agent assignment
+[x] Dividing agent assignment
 [ ] swapping agent assignment
 
 

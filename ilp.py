@@ -23,17 +23,22 @@ def generate_assignments(targets_states, target_params, tracker_position):
         positions_sampled[ix] = position_rollouts[ix][samples, :]
         times_sampled[ix] = times[ix][samples]
 
-    dag_weight_matrix, partitions = build_pdag(times_sampled, positions_sampled, tracker_position)
+   
+    path = None 
+    vmax_base = 5
+    for ix in range(1,10):
+        dag_weight_matrix, partitions = build_pdag(times_sampled, positions_sampled, tracker_position, vmax_base*ix)
 
-    #import matplotlib.pyplot as plt
-    #mat = dag_weight_matrix.copy()
-    #mat[mat > 999] = 1
-    #plt.imshow(mat)
-    #plt.show()
-
-    n = dag_weight_matrix.shape[0]
-    node_weights = -100*np.ones(n)
-    path = pdag_min_paths(dag_weight_matrix, node_weights, partitions, 1)[0]
+        n = dag_weight_matrix.shape[0]
+        node_weights = -100*np.ones(n)
+        path = pdag_min_paths(dag_weight_matrix, node_weights, partitions, 1)
+        print(targets_states)
+        if path is not None:
+            path = path[0]
+            print(path)
+            break
+        else:
+            print('Error: Cannot reach targets')
     
     offsets = np.cumsum([0, 1] + [len(tl) for tl in times_sampled])
     path_positions = []
@@ -81,7 +86,7 @@ def index_to_lol(ix, offsets):
 def lol_to_index(ix1, ix2, offsets):
     return offsets[ix1] + ix2 
 
-def build_pdag(times_lists, positions_lists, current_position):
+def build_pdag(times_lists, positions_lists, current_position, vmax):
     """ Build Partitioned DAG from a list of times and positions for each agent
 
         Args:
@@ -114,7 +119,7 @@ def build_pdag(times_lists, positions_lists, current_position):
                 dist = np.linalg.norm(cmp_loc - positions_lists_new[tl_ix][ix])
                 dt = times_lists_new[tl_ix][ix] - cmp_time
                 vel = dist / abs(dt)
-                if vel > 3:
+                if vel > vmax:
                     continue
                 if dt < 0:
                     weight_matrix[get_node_ix(tl_ix, ix), cmp_ix] = dist#-1
@@ -180,18 +185,23 @@ def pdag_min_paths(edge_weight_matrix, node_weights, partitions, n):
     #plt.show()
 
     for p in partitions:
-        incoming_cons = np.sum(variable_array[:, p])
-        model.addCons(incoming_cons <= 1) # incoming per partition <= 1
-        model.addCons(np.sum(variable_array[p, :]) <= np.sum(variable_array[:, p])) # outgoing per partition <= incoming
+        if np.any(variable_mask[:,p]):
+            incoming_cons = np.sum(variable_array[:, p])
+            model.addCons(incoming_cons <= 1) # incoming per partition <= 1
+            model.addCons(np.sum(variable_array[p, :]) <= np.sum(variable_array[:, p])) # outgoing per partition <= incoming
+        else:
+            return None
         
 
     for c in range(n, nc):
         if np.any(variable_mask[:, c]) or np.any(variable_mask[c, :]):
             model.addCons(np.sum(variable_array[:, c]) >= np.sum(variable_array[c, :])) # incoming - outgoing consistency
-        pass
 
     for r in range(n):
-        model.addCons(np.sum(variable_array[r, :]) <= 1) # the "initial" positions have at most one outgoing edge
+        if np.any(variable_mask[r,:]):
+            model.addCons(np.sum(variable_array[r, :]) <= 1) # the "initial" positions have at most one outgoing edge
+        else:
+            return None
 
 
     model.optimize()
