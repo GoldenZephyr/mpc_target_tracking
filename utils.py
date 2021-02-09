@@ -1,6 +1,44 @@
 import numpy as np
-from dynamics import step
+from dynamics import step, unicycle_ddt
 
+
+def rollout(state, params, n_steps, dt):
+    positions = np.zeros((n_steps, 2))
+    times = np.zeros(n_steps)
+    x = state
+    u = np.zeros(2)
+    p = params
+    for ix in range(n_steps):
+        positions[ix] = x[:2]
+        times[ix] = ix * dt
+        x = x + unicycle_ddt(x, u, p) * dt
+    return times, positions
+
+
+def mvee(points, tol = 0.001):
+    """
+    Find the minimum volume ellipse.
+    Return A, c where the equation for the ellipse given in "center form" is
+    (x-c).T * A * (x-c) = 1
+    """
+    points = np.asmatrix(points)
+    N, d = points.shape
+    Q = np.column_stack((points, np.ones(N))).T
+    err = tol+1.0
+    u = np.ones(N)/N
+    while err > tol:
+        # assert u.sum() == 1 # invariant
+        X = Q * np.diag(u) * Q.T
+        M = np.diag(Q.T * np.linalg.inv(X) * Q)
+        jdx = np.argmax(M)
+        step_size = (M[jdx]-d-1.0)/((d+1)*(M[jdx]-1.0))
+        new_u = (1-step_size)*u
+        new_u[jdx] += step_size
+        err = np.linalg.norm(new_u-u)
+        u = new_u
+    c = u*points
+    A = np.linalg.inv(points.T*np.diag(u)*points - c.T*c)/d    
+    return np.asarray(A), np.squeeze(np.asarray(c))
 
 def check_view(tracker, targets, target_ix):
     #tracker = trackers.agent_list[0]

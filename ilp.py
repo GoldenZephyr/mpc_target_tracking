@@ -2,6 +2,7 @@ import numpy as np
 from pyscipopt import Model
 from dynamics import unicycle_ddt
 from agents import AgentGroup, DefaultTargetParams
+from utils import rollout
 import matplotlib.pyplot as plt
 
 
@@ -50,17 +51,6 @@ def generate_assignments(targets_states, target_params, tracker_position):
 
     return (path_assignments, path_positions)
 
-def rollout(state, params, n_steps, dt):
-    positions = np.zeros((n_steps, 2))
-    times = np.zeros(n_steps)
-    x = state
-    u = np.zeros(2)
-    p = params
-    for ix in range(n_steps):
-        positions[ix] = x[:2]
-        times[ix] = ix * dt
-        x = x + unicycle_ddt(x, u, p) * dt
-    return times, positions
 
 def sample_indices(times, positions, costs):
     """ Sample (time, position) pairs, maybe weighted according to costs 

@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 
+import time
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
 
 import casadi as cd
 from ilp import generate_assignments
-from utils import check_view, update_switch, predict_target
+from utils import check_view, update_switch, predict_target, mvee, rollout
 
 #from targets import TargetGroup
 from agents import AgentGroup, DefaultTargetParams, DefaultTrackerParams
@@ -19,8 +20,7 @@ from dynamics import update_agents, step
 no_video = False
 n_targets = 10
 n_trackers = 1
-use_tsp = True
-use_knn = False
+assignment_type = 'ELL'
 
 keep_going = True
 np.random.seed(4)
@@ -32,14 +32,10 @@ solver_comp = cd.nlpsol('solver', 'ipopt', './nlp.so', {'print_time':0, 'ipopt.p
 targets = AgentGroup(n_targets, [-5,-5,-5], [5,5,5], DefaultTargetParams())
 trackers = AgentGroup(n_trackers, [-5,-5,-5,], [5,5,5], DefaultTrackerParams())
 
-#plt.ion()
 fig, ax = plt.subplots()
 
 scats = initial_plot_target_group(ax, targets)
 scats_tracker = initial_plot_tracker_group(ax, trackers)
-
-#plt.draw()
-#plt.waitforbuttonpress()
 
 current_target_ix = 0
 switch_ix = 39
@@ -61,10 +57,12 @@ mpc_guesses = [w0, w0]
 assignment_ix = [0]*n_trackers
 current_target_indices = [0]*n_trackers
 trajectories = [0] * n_trackers
-def step_tracker(tracker, use_tsp, use_knn, targets, targets_responsible, mpc_guess):
-    #ix_map = np.arange(len(targets_responsible))[targets_responsible]
-    if not use_tsp:
-        if use_knn:
+def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_guess):
+
+    t0 = time.time()
+
+    if 'ILP' in assignment_type:
+        if 'KNN' in assignment_type:
             positions_to_visit = targets.unicycle_state[targets_responsible, :2] 
             tracker_position = tracker.state[:2]
             deltas = positions_to_visit - tracker_position
@@ -78,11 +76,29 @@ def step_tracker(tracker, use_tsp, use_knn, targets, targets_responsible, mpc_gu
             knn_map = np.arange(len(target_positions))
         (path_assignments, path_positions) = generate_assignments(target_positions, targets.agent_list[0].params, tracker.state[:2])
         assignments = [targets_responsible[knn_map[p]] for p in path_assignments]
-    else:
+    elif assignment_type == 'ELL':
+        target_rollouts = np.zeros((len(targets_responsible), 2))
+        for ix in range(len(targets_responsible)):
+            _, p = rollout(targets.agent_list[targets_responsible[ix]].unicycle_state, targets.agent_list[targets_responsible[ix]].params, 100, .1)
+            target_rollouts[ix] = p[-1]
+        volumes = np.zeros(len(targets_responsible))
+        for ix in range(len(targets_responsible)):
+            d = np.linalg.norm(tracker.state[:2] - targets.unicycle_state[targets_responsible[ix], :2])
+            t = d / tracker.params.max_velocity[0]
+            #ix_other = targets_responsible[:ix] + targets_responsible[ix+1:]
+            ix_other = [j for j in range(ix)] + [j for j in range(ix+1, len(targets_responsible))]
+            positions_other = target_rollouts[ix_other, :2]
+            A, c = mvee(positions_other)
+            volumes[ix] = np.linalg.det(A)
+            assignments = [targets_responsible[np.argmin(volumes)]]
+    elif assignment_type == 'TSP':
         remaining_target_positions = targets.pose[targets_responsible,:2]
         tsp_sol = solve_tsp(remaining_target_positions, tracker.state[:2], 'tracker_%d_tsp.tsp' % tracker.index)
         assignments = [targets_responsible[p] for p in tsp_sol]
+    else:
+        raise Exception('Unknown planner type %s' % assignment_type)
 
+    print('HLP took %f seconds' % (time.time() - t0))
 
     if len(assignments) > 0:
         current_target_ix = assignments[0]
@@ -147,9 +163,10 @@ def update(i):
     n_trackers = len(trackers.agent_list)
     targets_per_tracker = [[ix_map[jx] for jx in np.where(target_to_tracker == ix)[0]] for ix in range(n_trackers)] # list of targets for each 
 
+    t0 = time.time()
     for (ix, tracker) in enumerate(trackers.agent_list):
         # still need to divide targets
-        assignments, trajectory, move_on = step_tracker(tracker, use_tsp, use_knn, targets, targets_per_tracker[ix], mpc_guesses[ix])
+        assignments, trajectory, move_on = step_tracker(tracker, assignment_type, targets, targets_per_tracker[ix], mpc_guesses[ix])
         mpc_guesses[ix] = trajectory
         assignment_ix[ix] = assignments
         if len(assignments) > 0:
@@ -164,6 +181,7 @@ def update(i):
         keep_going = False
         print('\n\n\nDone!!!\n\n\n')
 
+    print('Total planning took %f seconds' % (time.time() - t0))
 
     update_agents(trackers, 5.0/40)
 
@@ -190,5 +208,5 @@ else:
     #ani = animation.FuncAnimation(fig, update, range(1, 2000), interval=100, blit=True)
     ani = animation.FuncAnimation(fig, update, frames=gen, blit=True, save_count=3000)
     #plt.show()
-    ani.save('videos/tsp_perf_3.mp4', writer=writer)
+    ani.save('videos/ellipse_test.mp4', writer=writer)
     #plt.show()
