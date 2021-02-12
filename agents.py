@@ -25,6 +25,7 @@ class Agent:
         self.index = ix
         self.state = state
         self.unicycle_state = unicycle_state
+        self.unicycle_state_mpc = self.unicycle_state[:5]
 
         self.position = self.state[:3]
         self.orientation = self.state[3:6]
@@ -35,6 +36,7 @@ class Agent:
         self.control = control
         self.linear_acceleration = self.control[0:1]
         self.angular_acceleration = self.control[1:2]
+        self.mpc_control = self.control[:2]
 
         self.params = agent_params
 
@@ -68,21 +70,23 @@ class AgentGroup:
         #self.angular_acceleration = self.control[:,3:6]
 
 
-        # 5 DOF unicycle state (x, y, theta, vel, omega)
-        self.unicycle_state = np.zeros((n, 5))
+        # 5 DOF unicycle state (x, y, theta, vel, omega, mpcc_theta)
+        self.unicycle_state = np.zeros((n, 6))
 
         self.unicycle_position = self.unicycle_state[:,:2]
         self.unicycle_orientation = self.unicycle_state[:,2:3]
         self.unicycle_velocity = self.unicycle_state[:,3:4]
         self.unicycle_angular_velocity = self.unicycle_state[:,4:5]
+        self.unicycle_mpcc_theta = self.unicycle_state[5:6]
 
         self.unicycle_position[:] = self.position[:,:2]
         self.unicycle_orientation[:] = self.orientation[:,2:3]
 
-        # 2 DOF unicycle control (a_x, \alpha)
-        self.unicycle_control = np.zeros((n,2))
+        # 3 DOF unicycle control (a_x, \alpha, mpcc_theta_dot)
+        self.unicycle_control = np.zeros((n,3))
         self.unicycle_acceleration = self.unicycle_control[:,0:1]
         self.unicycle_angular_acceleration = self.unicycle_control[:,1:2]
+        self.unicycle_mpcc_theta_dot = self.unicycle_control[:,2:3]
         
 
         # Construct list of individual agent objects that share the same underlying representation

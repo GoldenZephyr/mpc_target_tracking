@@ -11,7 +11,7 @@ from utils import check_view, update_switch, predict_target, mvee, rollout
 
 #from targets import TargetGroup
 from agents import AgentGroup, DefaultTargetParams, DefaultTrackerParams
-from visualization import initial_plot_target_group, update_plot_target_group, initial_plot_tracker_group, update_plot_tracker_group, cxt_to_artists
+from visualization import initial_plot_target_group, update_plot_target_group, initial_plot_tracker_group, update_plot_tracker_group, cxt_to_artists, plot_environment
 from tsp_glue import solve_tsp
 
 from dynamics import update_agents, step
@@ -20,7 +20,7 @@ from dynamics import update_agents, step
 no_video = False
 n_targets = 10
 n_trackers = 1
-assignment_type = 'ELL'
+assignment_type = 'TSP'
 
 keep_going = True
 np.random.seed(4)
@@ -32,10 +32,15 @@ solver_comp = cd.nlpsol('solver', 'ipopt', './nlp.so', {'print_time':0, 'ipopt.p
 targets = AgentGroup(n_targets, [-5,-5,-5], [5,5,5], DefaultTargetParams())
 trackers = AgentGroup(n_trackers, [-5,-5,-5,], [5,5,5], DefaultTrackerParams())
 
+#env = Environment([np.random.rand(5,2) for jx in range(5)])
+
 fig, ax = plt.subplots()
 
 scats = initial_plot_target_group(ax, targets)
 scats_tracker = initial_plot_tracker_group(ax, trackers)
+
+#plot_environment(ax, env)
+#plt.show()
 
 current_target_ix = 0
 switch_ix = 39
@@ -51,7 +56,7 @@ ubw = np.tile(ubw, (41, 1)).flatten()[5:]
 lbg = np.zeros(40*5)
 ubg = np.zeros(40*5)
 
-mpc_guesses = [w0, w0]
+mpc_guesses = [w0] * n_trackers
 
 
 assignment_ix = [0]*n_trackers
@@ -112,7 +117,6 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
 
         if move_on:
             tracker.params.switch_ix = 39
-            #targets_responsible[current_target_ix] = False
 
         switch_ix = tracker.params.switch_ix
         weights_1[0:switch_ix+1] = 1
@@ -122,11 +126,11 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
 
         # Solve MPC
         target_prediction = predict_target(targets.agent_list[current_target_ix])
-        sol = solver_comp(x0=mpc_guess, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg, p=cd.vertcat(tracker.unicycle_state, target_prediction.flatten(), targets.agent_list[next_target_ix].unicycle_state[:3], weights_1, weights_2))
+        sol = solver_comp(x0=mpc_guess, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg, p=cd.vertcat(tracker.unicycle_state_mpc, target_prediction.flatten(), targets.agent_list[next_target_ix].unicycle_state[:3], weights_1, weights_2))
         w0 = sol['x']
 
         controls = np.array(sol['x'][7:9]).flatten()
-        tracker.control[:] = controls[:]
+        tracker.mpc_control[:] = controls[:]
         trackers.synchronize_state()
        
         tracker.params.switch_ix = update_switch(targets, w0, current_target_ix, switch_ix) 
@@ -173,7 +177,8 @@ def update(i):
             current_target_indices[ix] = assignments[0]
         else:
             current_target_indices[ix] = None
-        trajectories[ix] = trajectory
+        #trajectories[ix] = trajectory
+        trajectories[ix] = np.reshape(np.hstack([np.zeros(5), np.array(trajectory).flatten()]), (41,7))
         if move_on:
             need_visit_list[assignments[0]] = False
     #if all([a is None for a in current_target_indices]):
@@ -208,5 +213,5 @@ else:
     #ani = animation.FuncAnimation(fig, update, range(1, 2000), interval=100, blit=True)
     ani = animation.FuncAnimation(fig, update, frames=gen, blit=True, save_count=3000)
     #plt.show()
-    ani.save('videos/ellipse_test.mp4', writer=writer)
+    ani.save('videos/temp.mp4', writer=writer)
     #plt.show()

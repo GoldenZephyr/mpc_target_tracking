@@ -6,19 +6,36 @@ import casadi as cd
 
 def update_agents(agents, dt):
     for t in agents.agent_list:
-        state_new = step(t.unicycle_state, t.control, t.params, dt)
+        state_new = step(t.unicycle_state, t.control, t.params, dt, mpcc=True)
         t.unicycle_state[:] = state_new
 
-def step(x, u, p, dt):
+def step(x, u, p, dt, mpcc=False):
+    
+    if mpcc:
+        f = mpcc_ddt
+    else:
+        f = unicycle_ddt
 
-    k1 = unicycle_ddt(x, u, p)
-    k2 = unicycle_ddt(x + dt * k1/2., u, p)
-    k3 = unicycle_ddt(x + dt * k2/2., u, p)
-    k4 = unicycle_ddt(x + dt * k3, u, p)
+    k1 = f(x, u, p)
+    k2 = f(x + dt * k1/2., u, p)
+    k3 = f(x + dt * k2/2., u, p)
+    k4 = f(x + dt * k3, u, p)
 
     x_new = x + (k1 + 2*k2 + 2*k3 + k4) * dt/6.
 
     return x_new
+
+def mpcc_ddt(x, u, p, casadi=False):
+    x_tracker = x[:-1]
+    u_tracker = u[:-1]
+    ddt_tracker = unicycle_ddt(x_tracker, u_tracker, p, casadi=casadi)
+    if casadi:
+        return cd.vertcat(ddt_tracker, u[-1])
+    else:
+        ddt = np.zeros(6, dtype=float)
+        ddt[:-1] = ddt_tracker
+        ddt[-1] = u[-1]
+        return ddt
 
 
 def unicycle_ddt(x, u, p, casadi=False):

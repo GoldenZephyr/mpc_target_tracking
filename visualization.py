@@ -1,8 +1,11 @@
 # visualization.py -- Visualze targets and trackers
 
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.collections import PatchCollection
+
 
 def cxt_to_artists(targets, trackers):
     artists = []
@@ -13,10 +16,12 @@ def cxt_to_artists(targets, trackers):
     artists += trackers.traj_plots
     return artists
 
+
 class TargetPlotCxt:
     def __init__(self):
         self.target_scatter_list = []
         self.target_fov_list = []
+
 
 class TrackerPlotCxt:
     def __init__(self):
@@ -24,6 +29,23 @@ class TrackerPlotCxt:
         self.track_list = []
         self.traj_plots = []
         self.tsp_plots = []
+
+        self.mpcc_points = [] 
+
+
+def plot_environment(ax, env):
+    patch_list = []
+    for vertex_list in env.obstacles:
+        polygon = patches.Polygon(vertex_list, True)
+        patch_list.append(polygon)
+
+    p = PatchCollection(patch_list, cmap=matplotlib.cm.jet, alpha=0.4)
+
+    colors = 100*np.random.rand(len(patch_list))
+    p.set_array(np.array(colors))
+
+    ax.add_collection(p)
+
 
 def generate_triangle_pts(t):
     r = 2
@@ -58,6 +80,9 @@ def initial_plot_tracker_group(ax, trackers):
         l4 = ax.plot(xs, ys, color='c', alpha=0.2)[0]
         cxt.tsp_plots.append(l4)
 
+        l5 = ax.scatter([], [], color='m')
+        cxt.mpcc_points.append(l5)
+
     return cxt
 
 def initial_plot_target_group(ax, group):
@@ -76,7 +101,7 @@ def initial_plot_target_group(ax, group):
 
     return cxt
 
-def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp_order, cxt):
+def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp_order, cxt, mpcc_points=None):
     for (ix, t) in enumerate(group.agent_list):
         cxt.tracker_scatter_list[ix].set_offsets(t.position[:-1])
 
@@ -93,16 +118,22 @@ def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp_orde
             xs = [t.position[0]]
             ys = [t.position[1]]
         else:
-            vars = np.hstack([np.zeros(5), np.array(trajectories[ix]).flatten()])
-            vars_2d = np.reshape(vars, (41,7))
-            xs = vars_2d[1:,0]
-            ys = vars_2d[1:,1]
+            #vars = np.hstack([np.zeros(5), np.array(trajectories[ix]).flatten()])
+            #vars_2d = np.reshape(vars, (41,7))
+            #xs = vars_2d[1:,0]
+            #ys = vars_2d[1:,1]
+            xs = trajectories[ix][1:, 0]
+            ys = trajectories[ix][1:, 1]
         cxt.traj_plots[ix].set_data(xs, ys)
 
         tsp_pos = targets.pose[tsp_order[ix], :2]
         xs = tsp_pos[:, 0]
         ys = tsp_pos[:, 1]
         cxt.tsp_plots[ix].set_data(xs, ys)
+
+
+        if mpcc_points is not None:
+            cxt.mpcc_points[ix].set_offsets(mpcc_points[ix])
 
 def update_plot_target_group(group, cxt):
     for (ix, t) in enumerate(group.agent_list):

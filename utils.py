@@ -1,11 +1,13 @@
 import numpy as np
 from dynamics import step, unicycle_ddt
+from scipy.optimize import minimize_scalar
+from scipy.linalg import eigh
 
 
 def rollout(state, params, n_steps, dt):
     positions = np.zeros((n_steps, 2))
     times = np.zeros(n_steps)
-    x = state
+    x = state[:5]
     u = np.zeros(2)
     p = params
     for ix in range(n_steps):
@@ -78,12 +80,40 @@ def update_switch(targets, traj, current_target_ix, switch_ix):
 def predict_target(target):
     prediction = np.zeros((40, 3))
     state = np.copy(target.unicycle_state)
-    u = np.zeros(2)
+    u = np.zeros(3)
     p = target.params
 
     prediction[0] = state[:3]
     for ix in range(39):
-        state = step(state, u, p, 5.0/40)
+        state = step(state, u, p, 5.0/40, mpcc=True)
         prediction[ix+1] = state[:3]
     return prediction
+
+
+def K_full(s, v, A_inv, B_inv):
+    return 1 - v @ np.linalg.inv(A_inv / (1-s) + B_inv / s) @ v[:,None] 
+
+def ellipsoids_intersect2(A, B, a, b):
+    # assumes ellipse of form (x - a)' A (x - a) < 1
+    res = minimize_scalar(K_full, bounds=(0., 1.), args=(a - b, np.linalg.inv(A), np.linalg.inv(B)), method='bounded')
+    return (res.fun >= 0)
+
+# From: https://math.stackexchange.com/questions/1114879/detect-if-two-ellipses-intersect
+def K(x, dd, v):
+    return 1. - np.sum(v * ((dd * x * (1. - x)) / (x + dd * (1. - x))) * v)
+def ellipsoids_intersect(A, B, a, b):
+    # assumes ellipse of form (x - a)' A (x - a) < 1
+    dd, Phi = eigh(A, B, eigvals_only=False)
+    v = np.dot(Phi.T, a - b)
+    res = minimize_scalar(K, bounds=(0., 1.), args=(dd, v), method='bounded')
+    return (res.fun >= 0)
+
+
+def get_path(pred, i, j):
+    path = [j]
+    k = j
+    while pred[i, k] != -9999:
+        path.append(pred[i, k])
+        k = pred[i, k]
+    return path[::-1]
 
