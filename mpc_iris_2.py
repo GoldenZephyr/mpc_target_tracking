@@ -177,14 +177,8 @@ for k in range(40):
 
 A = cd.DM.eye(2) * .1
 B = cd.DM.eye(2) * .1
-C = cd.DM.eye(2) * .1
-D = cd.DM.eye(2) * .1
-E = cd.DM.eye(2) * .1
 a = cd.DM.zeros(2)
 b = cd.DM.zeros(2)
-c = cd.DM.zeros(2)
-d = cd.DM.zeros(2)
-e = cd.DM.zeros(2)
 
 
 #sol = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg, p=cd.vertcat(.1, .1, 0, 0, 0, target_prediction, -1, 1, 0, weights_1, weights_2, A.reshape((4,1)), B.reshape((4,1)), C.reshape((4,1)), D.reshape((4,1)), E.reshape((4,1)), a, b, c, d, e))

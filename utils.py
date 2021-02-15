@@ -2,6 +2,41 @@ import numpy as np
 from dynamics import step, unicycle_ddt
 from scipy.optimize import minimize_scalar
 from scipy.linalg import eigh
+import irispy
+
+def find_ellipse_intersection(A, B, a, b):
+    lower = 0
+    upper = 1
+    while 1:
+        lam = (lower + upper) / 2.
+        e_lambda = lam * A + (1 - lam) * B
+        m_lambda = np.linalg.inv(e_lambda) @ (lam * A @ a[:, None] + (1 - lam) * B @ b[:,None])
+
+        print('a', a)
+        print('m_lam', m_lambda)
+        print(A)
+        dist = (a[:,None] - m_lambda).T @ A @ (a[:,None] - m_lambda)
+        in_A = dist < 1
+        dist = (b[:,None] - m_lambda).T @ B @ (b[:,None] - m_lambda)
+        in_B = dist < 1
+
+        if in_A and not in_B:
+            lower = lam
+        elif in_B and not in_A:
+            upper = lam
+        elif in_A and in_B:
+            break
+        else:
+            raise Exception('Ellipses do not overlap!')
+
+    return np.squeeze(m_lambda)
+
+def call_irispy(env, seed):
+    obs = [arr.T for arr in env.obstacles]
+    bounds = irispy.Polyhedron.fromBounds(*env.bounds)
+
+    region = irispy.inflate_region(obs, seed, bounds)
+    return region
 
 
 def rollout(state, params, n_steps, dt):
@@ -93,27 +128,19 @@ def predict_target(target):
 def K_full(s, v, A_inv, B_inv):
     return 1 - v @ np.linalg.inv(A_inv / (1-s) + B_inv / s) @ v[:,None] 
 
-def ellipsoids_intersect2(A, B, a, b):
+def ellipsoids_intersect(A, B, a, b):
     # assumes ellipse of form (x - a)' A (x - a) < 1
     res = minimize_scalar(K_full, bounds=(0., 1.), args=(a - b, np.linalg.inv(A), np.linalg.inv(B)), method='bounded')
     return (res.fun >= 0)
 
 # From: https://math.stackexchange.com/questions/1114879/detect-if-two-ellipses-intersect
-def K(x, dd, v):
-    return 1. - np.sum(v * ((dd * x * (1. - x)) / (x + dd * (1. - x))) * v)
-def ellipsoids_intersect(A, B, a, b):
-    # assumes ellipse of form (x - a)' A (x - a) < 1
-    dd, Phi = eigh(A, B, eigvals_only=False)
-    v = np.dot(Phi.T, a - b)
-    res = minimize_scalar(K, bounds=(0., 1.), args=(dd, v), method='bounded')
-    return (res.fun >= 0)
+#def K(x, dd, v):
+#    return 1. - np.sum(v * ((dd * x * (1. - x)) / (x + dd * (1. - x))) * v)
+#def ellipsoids_intersect(A, B, a, b):
+#    # assumes ellipse of form (x - a)' A (x - a) < 1
+#    dd, Phi = eigh(A, B, eigvals_only=False)
+#    v = np.dot(Phi.T, a - b)
+#    res = minimize_scalar(K, bounds=(0., 1.), args=(dd, v), method='bounded')
+#    return (res.fun >= 0)
 
-
-def get_path(pred, i, j):
-    path = [j]
-    k = j
-    while pred[i, k] != -9999:
-        path.append(pred[i, k])
-        k = pred[i, k]
-    return path[::-1]
 
