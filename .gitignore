@@ -8,3 +8,5 @@
 *.mp4
 costmap_test.py
 iris-distro/
+*.png
+

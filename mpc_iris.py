@@ -9,9 +9,58 @@ T = 5.0
 N = 40
 
 DT = T / N
-npoly = 4
+npoly = 10
 n_state = 6
 n_control = 3
+
+A = cd.MX.sym('A', 2, 2)
+B = cd.MX.sym('B', 2, 2)
+C = cd.MX.sym('C', 2, 2)
+D = cd.MX.sym('D', 2, 2)
+E = cd.MX.sym('E', 2, 2)
+F = cd.MX.sym('F', 2, 2)
+
+a = cd.MX.sym('a', 2)
+b = cd.MX.sym('b', 2)
+c = cd.MX.sym('c', 2)
+d = cd.MX.sym('d', 2)
+e = cd.MX.sym('e', 2)
+f_center = cd.MX.sym('f_center', 2)
+
+
+def define_collision_constraint():
+
+    A = cd.SX.sym('A', 2, 2)
+    B = cd.SX.sym('B', 2, 2)
+    C = cd.SX.sym('C', 2, 2)
+    D = cd.SX.sym('D', 2, 2)
+    E = cd.SX.sym('E', 2, 2)
+    F = cd.SX.sym('F', 2, 2)
+
+    a = cd.SX.sym('a', 2)
+    b = cd.SX.sym('b', 2)
+    c = cd.SX.sym('c', 2)
+    d = cd.SX.sym('d', 2)
+    e = cd.SX.sym('e', 2)
+    f_center = cd.SX.sym('f_center', 2)
+
+    X = cd.SX.sym('x', 2)
+
+    r1 = cd.mtimes([(X - a).T, A, X - a]) - 1
+    r2 = cd.mtimes([(X - b).T, B, X - b]) - 1
+    r3 = cd.mtimes([(X - c).T, C, X - c]) - 1
+    r4 = cd.mtimes([(X - d).T, D, X - d]) - 1
+    r5 = cd.mtimes([(X - e).T, E, X - e]) - 1
+    r6 = cd.mtimes([(X - f_center).T, F, X - f_center]) - 1
+
+    coll_cons = cd.mmin(cd.vertcat(0, r1)) + cd.mmin(cd.vertcat(0, r2)) + cd.mmin(cd.vertcat(0, r3)) + cd.mmin(cd.vertcat(0, r4)) + cd.mmin(cd.vertcat(0, r5)) + cd.mmin(cd.vertcat(0, r6))
+    # might try min(0, r) + max(0, min(.1r, 1))
+
+    collision_constraint = cd.Function('collision_constraint', [X, A, B, C, D, E, F, a, b, c, d, e, f_center], [coll_cons])
+    return collision_constraint
+
+collision_constraint = define_collision_constraint()
+
 
 def poly_derivative(coefs):
     coef_d = cd.SX.sym('c_deriv', npoly - 1)
@@ -42,13 +91,6 @@ def generate_contour_cost_function():
     res_proj = cd.mtimes([cd.transpose(r_pqs), n])
     e_l = cd.norm_2(res_proj) ** 2
     e_c = cd.norm_2(r_pqs - cd.mtimes([res_proj, n])) ** 2
-
-    #err = cd.norm_2(r_pqs)**2
-    #p = path_poly_eval(coefs_x, coefs_y, 0)
-    #err = cd.norm_2(tracker_position - p)**2 
-    #err = 10*cd.norm_2(tracker_position - p)**2 + 10*cd.norm_2(tracker_position - path_poly_eval(coefs_x, coefs_y, contour_dist))**2
-    #err = cd.norm_2(tracker_position - path_poly_eval(coefs_x, coefs_y, contour_dist))**2
-    #output = [err]
 
     inputs = [tracker_position, contour_dist, contour_dist_des, coefs_x, coefs_y, w_c, w_l, w_d]
     labels = ['tracker_position', 'contour_dist', 'contour_dist_des', 'cx', 'cy', 'w_c', 'w_l', 'w_d']
@@ -157,7 +199,7 @@ for k in range(N):
     #loss += target_2_weights[k] * l(next_target_state, Xk, Uk)
 
     #tracker_position, contour_dist, contour_dist_des, coefs_x, coefs_y, w_c, w_l, w_d
-    loss += contour_cost_func(Xk[:2], Xk[5], 1, spline_coef_x, spline_coef_y, 1, 1, 1)
+    loss += contour_cost_func(Xk[:2], Xk[5], 1, spline_coef_x, spline_coef_y, .1, .1, 4)
     loss += .01*cd.norm_2(Uk)**2
 
 
@@ -184,12 +226,16 @@ for k in range(N):
     lbg += [0, 0, 0, 0, 0, 0]
     ubg += [0, 0, 0, 0, 0, 0]
 
+    g += [collision_constraint(Xk[:2], A, B, C, D, E, F, a, b, c, d, e, f_center)]
+    lbg += [-cd.inf]
+    ubg += [-.0001]
+
     Xk = Xk_next
     Uk = Uk_next
 
 #loss += l_terminal(next_target_state, Xk)
 
-prob = {'f': loss, 'x': cd.vertcat(*w), 'g': cd.vertcat(*g), 'p': cd.vertcat(X0_sym, target_prediction, next_target_state, target_1_weights, target_2_weights, spline_coef_x, spline_coef_y)}
+prob = {'f': loss, 'x': cd.vertcat(*w), 'g': cd.vertcat(*g), 'p': cd.vertcat(X0_sym, target_prediction, next_target_state, target_1_weights, target_2_weights, spline_coef_x, spline_coef_y, A.reshape((4,1)), B.reshape((4,1)), C.reshape((4,1)), D.reshape((4,1)), E.reshape((4,1)), F.reshape((4,1)), a, b, c, d, e, f_center)}
 solver = cd.nlpsol('solver', 'ipopt', prob)
 
 target_position = 0
@@ -211,7 +257,20 @@ for k in range(40):
     target_prediction[3*k + 1] = 3
     target_prediction[3*k + 2] = 0
 
-sol = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg, p=cd.vertcat(.1, .1, 0, 0, 0, 0, target_prediction, -1, 1, 0, weights_1, weights_2, spline_coef_x, spline_coef_y))
+A = cd.DM.eye(2) * .1
+B = cd.DM.eye(2) * .1
+C = cd.DM.eye(2) * .1
+D = cd.DM.eye(2) * .1
+E = cd.DM.eye(2) * .1
+F = cd.DM.eye(2) * .1
+a = cd.DM.zeros(2)
+b = cd.DM.zeros(2)
+c = cd.DM.zeros(2)
+d = cd.DM.zeros(2)
+e = cd.DM.zeros(2)
+f_center = cd.DM.zeros(2)
+
+sol = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg, p=cd.vertcat(.1, .1, 0, 0, 0, 0, target_prediction, -1, 1, 0, weights_1, weights_2, spline_coef_x, spline_coef_y, A.reshape((4,1)), B.reshape((4,1)), C.reshape((4,1)), D.reshape((4,1)), E.reshape((4,1)), F.reshape((4,1)), a, b, c, d, e, f_center))
 w_opt = sol['x']
 
 x = []

@@ -13,6 +13,35 @@ from visualization import initial_plot_tracker_group, initial_plot_target_group,
 from utils import ellipsoids_intersect, get_path, ellipsoids_intersect2
 from dynamics import update_agents
 
+
+def find_ellipse_intersection(A, B, a, b):
+    lower = 0
+    upper = 1
+    while 1:
+        lam = (lower + upper) / 2.
+        e_lambda = lam * A + (1 - lam) * B
+        m_lambda = np.linalg.inv(e_lambda) @ (lam * A @ a[:, None] + (1 - lam) * B @ b[:,None])
+       
+        print('a', a)
+        print('m_lam', m_lambda)
+        print(A)
+        dist = (a[:,None] - m_lambda).T @ A @ (a[:,None] - m_lambda)
+        in_A = dist < 1
+        dist = (b[:,None] - m_lambda).T @ B @ (b[:,None] - m_lambda)
+        in_B = dist < 1
+
+        if in_A and not in_B:
+            lower = lam
+        elif in_B and not in_A:
+            upper = lam
+        elif in_A and in_B:
+            break
+        else:
+            raise Exception('Ellipses do not overlap!')
+
+    return np.squeeze(m_lambda)
+
+
 def call_irispy(env, seed):
     obs = [arr.T for arr in env.obstacles]
     bounds = irispy.Polyhedron.fromBounds(*env.bounds)
@@ -72,7 +101,7 @@ while(any(needed_points)):
     ix_remaining = ix_list[needed_points]
     for ix in ix_remaining:
         dist = (vals[ix] - d) @ c_inv_sq @ (vals[ix] - d)[:,None]
-        eps = .01
+        eps = .01 # need this because sometimes the ellipsoid fits the seed point *on* the ellipse boundary
         if dist < 1 + eps:
             needed_points[ix] = False
     #fig = plt.figure()
@@ -109,7 +138,7 @@ plt.figure()
 plt.imshow(ellipse_connectivity)
 plt.show() 
 
-start = np.array([-7,-5])
+start = np.array([-4,-5])
 end = np.array([8, 0])
 #end = np.array([-3, 6])
 
@@ -133,16 +162,27 @@ plt.imshow(D)
 plt.show()
 ellipse_path = get_path(pred, start_ellipse_ix, end_ellipse_ix)
 print(ellipse_path)
-centers = np.array([start] + [d_list[ix] for ix in ellipse_path] + [end])
+ellipse_pairs = [(ellipse_path[ix], ellipse_path[ix+1]) for ix in range(len(ellipse_path) - 1)]
+waypoints = [find_ellipse_intersection(c_inv_sq_list[a], c_inv_sq_list[b], d_list[a], d_list[b]) for (a,b) in ellipse_pairs]
+#centers = np.array([start] + [d_list[ix] for ix in ellipse_path] + [end])
+#centers = np.array([start] + waypoints + [end])
+centers = np.array(waypoints + [end])
+shape_matrices = [c_inv_sq_list[ix] for ix in ellipse_path]
+offsets = [d_list[ix] for ix in ellipse_path]
+
+#A,B,C,D,E = shape_matrices
+#a,b,c,d,e = offsets
+
 
 dists = np.cumsum(np.hstack(([0], np.linalg.norm(np.diff(centers, axis=0), axis=1))))
 dists = dists / dists[-1]
 
-n_poly = 4
-#xpoly = np.polynomial.polynomial.Polynomial.fit(dists, centers[:,0], n_poly - 1, domain=(0,1))
-#ypoly = np.polynomial.polynomial.Polynomial.fit(dists, centers[:,1], n_poly - 1, domain=(0,1))
-xpoly = np.polynomial.polynomial.Polynomial.fit(dists, centers[:,0], n_poly - 1)
-ypoly = np.polynomial.polynomial.Polynomial.fit(dists, centers[:,1], n_poly - 1)
+n_poly = 10
+xnew = np.linspace(0,1,20)
+#xpoly = np.polynomial.polynomial.Polynomial.fit(dists, centers[:,0], n_poly - 1)
+#ypoly = np.polynomial.polynomial.Polynomial.fit(dists, centers[:,1], n_poly - 1)
+xpoly = np.polynomial.polynomial.Polynomial.fit(xnew, np.interp(xnew, dists, centers[:,0]), n_poly - 1)
+ypoly = np.polynomial.polynomial.Polynomial.fit(xnew, np.interp(xnew, dists, centers[:,1]), n_poly - 1)
 
 xpoly_coef = xpoly.convert().coef[::-1]
 ypoly_coef = ypoly.convert().coef[::-1]
@@ -157,20 +197,26 @@ print(ypoly_coef)
 xpoly_plot = xpoly(np.linspace(0,1,40))
 ypoly_plot = ypoly(np.linspace(0,1,40))
 
+#plt.figure()
+#plt.scatter(dists,centers[:,0])
+#plt.scatter(xnew, np.interp(xnew, dists, centers[:,0]))
+#plt.klot(np.linspace(0,1,40), xpoly_plot)
+#plt.show()
+
 
 
 fig, ax = plt.subplots()
-ax.plot(ref_path[:,0], ref_path[:,1])
+#ax.plot(ref_path[:,0], ref_path[:,1])
 #for r in region_list:
 #for r in [region_list[i] for i in [0, 14]]:
 for r in [region_list[i] for i in ellipse_path]:
     r.ellipsoid.draw()
 
-plt.scatter(xv,yv)
+#plt.scatter(xv,yv)
 n_trackers = 1
 trackers = AgentGroup(n_trackers, [-5,-5,-5,], [5,5,5], DefaultTrackerParams())
 trackers.unicycle_state[0,:2] = np.array([-4,-5])
-trackers.unicycle_state[0,5] = 0.5
+trackers.unicycle_state[0,5] = 0.1
 trackers.synchronize_state()
 
 targets = AgentGroup(1, [-5,-5,-5,], [5,5,5], DefaultTargetParams())
@@ -183,8 +229,8 @@ scats_tracker = initial_plot_tracker_group(ax, trackers)
 plot_environment(ax, env)
 
 print(centers)
-plt.plot(centers[:,0], centers[:,1])
-plt.plot(xpoly_plot, ypoly_plot)
+plt.scatter(centers[:,0], centers[:,1])
+#plt.plot(xpoly_plot, ypoly_plot)
 
 #for seed_point in ref_path:
 #    #seed_point = np.array([4.0, 2.0])
@@ -196,48 +242,107 @@ plt.plot(xpoly_plot, ypoly_plot)
 #plt.show()
 
 
-solver_comp = cd.nlpsol('solver_iris', 'ipopt', './nlp_iris.so', {'print_time':0, 'ipopt.print_level' : 0, 'ipopt.max_cpu_time': 0.2})
+#solver_comp = cd.nlpsol('solver_iris', 'ipopt', './nlp_iris.so', {'print_time':0, 'ipopt.print_level' : 0, 'ipopt.max_cpu_time': 1})
+solver_comp = cd.nlpsol('solver_iris', 'ipopt', './nlp_iris_2.so', {'print_time':0, 'ipopt.print_level' : 0, 'ipopt.max_cpu_time': .6})
 
-w0 = cd.vertcat(np.random.random(363))
+w0 = cd.vertcat(np.random.random(282))
 bounds = cd.inf
-lbw = np.array([-bounds, -bounds, -cd.inf, 0, -cd.pi/4.0, 0, -1, -2, -.1])
-ubw = np.array([bounds, bounds, cd.inf, 3, cd.pi/4.0, 1, 1, 2, .1])
+lbw = np.array([-bounds, -bounds, -cd.inf, 0, -cd.pi/2.0, -3, -3])
+ubw = np.array([bounds, bounds, cd.inf, 3, cd.pi/2.0, 3, 3])
 
-lbw = np.tile(lbw, (41, 1)).flatten()[6:]
-ubw = np.tile(ubw, (41, 1)).flatten()[6:]
+lbw = np.tile(lbw, (41, 1)).flatten()[5:]
+ubw = np.tile(ubw, (41, 1)).flatten()[5:]
 
-lbg = np.zeros(40*6)
-ubg = np.zeros(40*6)
+lbg_base = np.array([0.,0,0,0,0,0,0])
+ubg_base = np.array([0.,0,0,0,0,0,0])
+
+lbg = np.tile(lbg_base, (40, 1))
+ubg = np.tile(ubg_base, (40, 1))
+#lbg = np.zeros(40*6)
+#ubg = np.zeros(40*6)
 
 mpc_guesses = [w0] * n_trackers 
 weights_1 = cd.DM.ones(40)
 weights_2 = cd.DM.ones(40)
 
+weights_1[38:] = 0
+weights_2[:38] = 0
+
+
+waypoint_ix = 0
+switch_ix = 40
+
 def update(ix):
+    global waypoint_ix, switch_ix
+    print(ix)
+
+    #pos = trackers.agent_list[0].unicycle_state[:2]
+    #theta = trackers.agent_list[0].unicycle_state[2]
+    #rev = np.array([np.cos(theta), np.sin(theta)])
+    #perp = np.array([-np.sin(theta), np.cos(theta)])
+    #new_obs = np.array([pos - 1.5*rev + 5*perp, pos - 1.5*1.5*rev + 5*perp, pos - 1.5*1.5*rev - 5*perp, pos - 1.5*rev - 5*perp])
+    #env_temp = Environment(obstacles + [new_obs], [[-10, -10], [10, 10]])
+    #print(len(env_temp.obstacles))
+    ##plot_environment(ax, env_temp)
+    ##region = call_irispy(env_temp, trackers.agent_list[0].unicycle_state[:2])
+    ##region.ellipsoid.draw()
+    #ell_agent_d = region.ellipsoid.getD()
+    #c_ell = region.ellipsoid.getC()
+    #c_inv = np.linalg.inv(c_ell)
+    #ell_agent_c = c_inv @ c_inv
+
+
     # Solve MPC
-    target_prediction = np.tile(np.hstack((end, [0])), (40, 1))
-    sol = solver_comp(x0=mpc_guesses[0], lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg, p=cd.vertcat(trackers.agent_list[0].unicycle_state, target_prediction.flatten(), target_prediction[0], weights_1, weights_2, xpoly_coef, ypoly_coef))
+    if np.linalg.norm(centers[waypoint_ix] - trackers.agent_list[0].unicycle_state[:2]) < .3:
+        waypoint_ix += 1
+        switch_ix = 40
+    next_ix = min(waypoint_ix + 1, len(centers)-1)
+    target_prediction = np.tile(np.hstack((centers[waypoint_ix], [0])), (40, 1))
+
+    A = shape_matrices[waypoint_ix]
+    B = shape_matrices[min(len(shape_matrices)-1, next_ix)]
+
+    a = offsets[waypoint_ix]
+    b = offsets[min(len(shape_matrices)-1, next_ix)]
+
+    ubg[:switch_ix, 5] = 1
+    ubg[:switch_ix, 6] = np.inf #np.inf
+    ubg[switch_ix:, 5] = 9999 #np.inf
+    ubg[switch_ix:, 6] = 1
+
+    print('waypoint ix: ', waypoint_ix)
+    print('waypoint_position:', centers[waypoint_ix])
+    
+    #sol = solver_comp(x0=mpc_guesses[0], lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg, p=cd.vertcat(trackers.agent_list[0].unicycle_state, target_prediction.flatten(), target_prediction[0], weights_1, weights_2, xpoly_coef, ypoly_coef, A.reshape((4,1)), B.reshape((4,1)), C.reshape((4,1)), D.reshape((4,1)), E.reshape((4,1)), ell_agent_c.reshape((4,1)), a, b, c, d, e, ell_agent_d ))
+    #sol = solver_comp(x0=mpc_guesses[0], lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg, p=cd.vertcat(trackers.agent_list[0].unicycle_state_mpc, target_prediction.flatten(), np.hstack([centers[next_ix], [0]]), weights_1, weights_2, A.reshape((4,1)), B.reshape((4,1)), C.reshape((4,1)), D.reshape((4,1)), E.reshape((4,1)), a, b, c, d, e))
+    sol = solver_comp(x0=mpc_guesses[0], lbx=lbw, ubx=ubw, lbg=lbg.flatten(), ubg=ubg.flatten(), p=cd.vertcat(trackers.agent_list[0].unicycle_state_mpc, target_prediction.flatten(), np.hstack([centers[next_ix], [0]]), weights_1, weights_2, A.reshape((4,1)), B.reshape((4,1)), a, b, 1))
     w0 = sol['x']
 
-    controls = np.array(sol['x'][:3]).flatten()
-    trackers.agent_list[0].control[:] = controls[:]
+    controls = np.array(sol['x'][:2]).flatten()
+    trackers.agent_list[0].control[:2] = controls[:]
     trackers.synchronize_state()
     update_agents(trackers, 5.0/40)
 
-    traj_2d = np.reshape(np.hstack((np.zeros(6), np.array(w0).flatten())), (41,9))
-    mpcc_theta = np.array(sol['x'])[8]
-    mpcc_x = xpoly(mpcc_theta)[0]
-    mpcc_y = ypoly(mpcc_theta)[0]
-    mpcc_point = np.array([mpcc_x, mpcc_y])
-    update_plot_tracker_group(trackers, [traj_2d], [0], targets, [[0]], scats_tracker, [mpcc_point])
+
+
+    traj_2d = np.reshape(np.hstack((np.zeros(5), np.array(w0).flatten())), (41,7))
+    ## update when we switch constraint ellipse
+    for jx in range(1, traj_2d.shape[0]):
+        pos = traj_2d[jx, :2]
+        rad = (pos - b) @ B @ (pos - b)[:,None]
+        if rad < 1:
+            switch_ix = jx + 1
+            break
+
+    update_plot_tracker_group(trackers, [traj_2d], [0], targets, [[0]], scats_tracker, None)
 
     artists = cxt_to_artists(scats, scats_tracker)
     return artists
 
 Writer = animation.writers['ffmpeg']
 writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
-ani = animation.FuncAnimation(fig, update, range(1, 2000), interval=100, blit=False)
-#ani = animation.FuncAnimation(fig, update, frames=gen, blit=True, save_count=3000)
-plt.show()
-#ani.save('videos/ellipse_test.mp4', writer=writer)
+#ani = animation.FuncAnimation(fig, update, range(1, 2000), interval=200, blit=False)
+ani = animation.FuncAnimation(fig, update, frames=range(1,2000), blit=True, save_count=3000)
+#plt.show()
+ani.save('videos/temp.mp4', writer=writer)
 
