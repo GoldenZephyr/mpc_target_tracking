@@ -2,6 +2,7 @@ import numpy as np
 from shapely import geometry
 from utils import call_irispy, ellipsoids_intersect, find_ellipse_intersection
 from scipy.sparse.csgraph import shortest_path
+from environment import Environment
 
 
 
@@ -11,7 +12,7 @@ def construct_environment(n_obs, bound):
     obstacles = []
     for ix in range(n_obs):
         verts = 2 * (np.random.rand(3,2) - 0.5)
-        verts += bounds*(np.random.rand(1,2) - 0.5)
+        verts += bound*(np.random.rand(1,2) - 0.5)
         obstacles.append(verts)
     env = Environment(obstacles, [[-bound, -bound], [bound, bound]])
     return env
@@ -34,7 +35,7 @@ def construct_ellipse_space(env):
     vals = np.vstack([xv, yv]).T
     shapely_points = [geometry.Point(p) for p in vals]
     ix_list = np.arange(len(xv))
-    c_list = []
+    C_list = []
     M_list = []
     center_list = []
     region_list = []
@@ -53,7 +54,7 @@ def construct_ellipse_space(env):
         c_inv_sq = c_inv @ c_inv
         M_list.append(c_inv_sq)
         region_list.append(region)
-        c_list.append(c) # shape matrix
+        C_list.append(c) # shape matrix
         center_list.append(d) # center
         ix_remaining = ix_list[needed_points]
         for ix in ix_remaining:
@@ -62,7 +63,7 @@ def construct_ellipse_space(env):
             if dist < 1 + eps:
                 needed_points[ix] = False
 
-    return region_list, M_list, center_list
+    return region_list, M_list, C_list, center_list
 
 
 def construct_ellipse_topology(M_list, center_list):
@@ -82,7 +83,7 @@ def construct_ellipse_topology(M_list, center_list):
     return graph
 
 
-def find_ellipse_for_point(M_list, center_list, point):
+def find_ellipses_for_point(M_list, center_list, point):
     for ix in range(len(M_list)):
         dist = (point - center_list[ix]) @ M_list[ix] @ (point - center_list[ix])[:,None]
         if dist < 1.:
@@ -93,12 +94,26 @@ def find_ellipse_for_point(M_list, center_list, point):
 
 def find_ellipsoid_path(graph, M_list, center_list, start, end):
 
-    start_ix = find_ellipse_for_point(M_list, center_list, start)
-    end_ix = find_ellipse_for_point(M_list, center_list, end)
+    start_ix_list = find_ellipses_for_point(M_list, center_list, start)
+    end_ix_list = find_ellipses_for_point(M_list, center_list, end)
 
-    D, pred = shortest_path(graph, directed=False, method='FW', return_predecessors=True)
-    ellipse_path = get_path(pred, start_ix, end_ix)
+
+    # We augment the ellipse connectivity graph with nodes for the start and end position
+    # The connectivity of these 2 nodes is determined by which ellipses they are contained in
+    n = graph.shape[0]
+    graph_aug = np.zeros((n+2, n+2))
+    graph_aug[:n, :n] = graph
+    graph_aug[n, start_ix_list] = 1
+    graph_aug[start_ix_list, n] = 1
+    graph_aug[n + 1, end_ix_list] = 1
+    graph_aug[end_ix_list, n + 1] = 1
+    
+
+    D, pred = shortest_path(graph_aug, directed=False, method='FW', return_predecessors=True)
+    ellipse_path = get_path(pred, n, n+1)
+    ellipse_path = ellipse_path[1:-1]
     ellipse_pairs = [(ellipse_path[ix], ellipse_path[ix+1]) for ix in range(len(ellipse_path) - 1)]
+    print(ellipse_pairs)
     waypoints = np.array([find_ellipse_intersection(M_list[a], M_list[b], center_list[a], center_list[b]) for (a,b) in ellipse_pairs])
     shape_matrices = [M_list[ix] for ix in ellipse_path]
     offsets = [center_list[ix] for ix in ellipse_path]

@@ -4,17 +4,24 @@ from scipy.optimize import minimize_scalar
 from scipy.linalg import eigh
 import irispy
 
+
+def compute_viewpoint_ref(target):
+    pos = target.unicycle_state[:2]
+    theta = target.unicycle_state[2]
+
+    r = 1 # eventually this should probably be a parameter somewhere?
+    viewpoint_ref = pos + r * np.array([np.cos(theta), np.sin(theta)])
+    return viewpoint_ref
+
 def find_ellipse_intersection(A, B, a, b):
     lower = 0
     upper = 1
     while 1:
+        print(lower, upper)
         lam = (lower + upper) / 2.
         e_lambda = lam * A + (1 - lam) * B
         m_lambda = np.linalg.inv(e_lambda) @ (lam * A @ a[:, None] + (1 - lam) * B @ b[:,None])
 
-        print('a', a)
-        print('m_lam', m_lambda)
-        print(A)
         dist = (a[:,None] - m_lambda).T @ A @ (a[:,None] - m_lambda)
         in_A = dist < 1
         dist = (b[:,None] - m_lambda).T @ B @ (b[:,None] - m_lambda)

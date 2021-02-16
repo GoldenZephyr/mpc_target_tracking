@@ -60,7 +60,7 @@ x_diff_heading = x_diff / cd.norm_2(x_diff)
 target_heading = cd.vertcat(cd.cos(target_state[2]), cd.sin(target_state[2]))
 
 cos_theta = cd.dot(x_diff_heading, target_heading)
-cost_viewpoint = -cos_theta + cd.sqrt(3)/2.0 + .001 * cd.norm_2(control_input)**2 + .01 * (cd.norm_2(x_diff)**2 - 1)**2
+cost_viewpoint = -cos_theta + cd.sqrt(3)/2.0 + .001 * cd.norm_2(control_input)**2 + .5 * (cd.norm_2(x_diff)**2 - 1)**2
 cost_travel = cd.norm_2(x_diff)**2 + .1 * cd.norm_2(control_input)**2
 #cost = cd.norm_2(tracker_state[:2] - target_state[:2])**2 + .01*cd.norm_2(control_input)**2
 

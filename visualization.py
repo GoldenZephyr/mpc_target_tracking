@@ -32,6 +32,27 @@ class TrackerPlotCxt:
 
         self.mpcc_points = [] 
 
+class EnvironmentPlotCxt:
+    def __init__(self, ax, env, ellipsoid_shape, ellipsoid_center):
+        self.ellipsoid_plots = []
+        plot_environment(ax, env)
+        t = np.linspace(0, 2*np.pi + .1, 25)
+        x = np.array([np.cos(t), np.sin(t)])
+        for ix in range(len(ellipsoid_shape)):
+            C = ellipsoid_shape[ix]
+            d = ellipsoid_center[ix]
+            y = C @ x + d[:,None]
+            xv = y[0,:]
+            yv = y[1,:]
+            l = plt.plot(xv, yv, color='b')[0]
+            self.ellipsoid_plots.append(l)
+
+
+def update_plot_environment(cxt, ellipses_to_show):
+    for ix in range(len(cxt.ellipsoid_plots)):
+        alpha = 1 if ix in ellipses_to_show else .1
+        cxt.ellipsoid_plots[ix].set_alpha(alpha)
+    
 
 def plot_environment(ax, env):
     patch_list = []
