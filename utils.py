@@ -17,7 +17,8 @@ def find_ellipse_intersection(A, B, a, b):
     lower = 0
     upper = 1
     while 1:
-        print(lower, upper)
+        if abs(lower - upper) < .00001:
+            raise Exception('Invalid ellipses')
         lam = (lower + upper) / 2.
         e_lambda = lam * A + (1 - lam) * B
         m_lambda = np.linalg.inv(e_lambda) @ (lam * A @ a[:, None] + (1 - lam) * B @ b[:,None])
@@ -28,9 +29,11 @@ def find_ellipse_intersection(A, B, a, b):
         in_B = dist < 1
 
         if in_A and not in_B:
-            lower = lam
-        elif in_B and not in_A:
+            #lower = lam
             upper = lam
+        elif in_B and not in_A:
+            #upper = lam
+            lower = lam
         elif in_A and in_B:
             break
         else:
@@ -100,19 +103,18 @@ def check_view(tracker, targets, target_ix):
     else:
         return False
 
-def update_switch(targets, traj, current_target_ix, switch_ix):
+def update_switch_viewpoint(target_traj, traj, switch_ix):
     traj_pad = np.hstack([np.zeros(5), np.array(traj).flatten()])
     traj_mat = np.reshape(traj_pad, (41, 7))
-    pos = traj_mat[:, 0:2]
+    pos = traj_mat[1:, 0:2]
 
-    target_state = targets.agent_list[current_target_ix].unicycle_state
-    target_pos = target_state[:2]
+    target_pos = target_traj[:,:2]
     pos_diff = pos - target_pos
     pos_diff_heading = pos_diff / np.linalg.norm(pos_diff)
 
-    target_heading = np.array([np.cos(target_state[2]), np.sin(target_state[2])])
+    target_heading = np.array([np.cos(target_traj[:,2]), np.sin(target_traj[:,2])]).T
 
-    cos_theta = np.dot(pos_diff_heading, target_heading)
+    cos_theta = np.sum(pos_diff_heading * target_heading, axis=1)
     new_ix = np.argmax(cos_theta > np.sqrt(3)/2.0)
     if new_ix == 0:
         return min(switch_ix + 3, 39)

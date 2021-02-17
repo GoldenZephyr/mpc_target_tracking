@@ -50,7 +50,7 @@ class EnvironmentPlotCxt:
 
 def update_plot_environment(cxt, ellipses_to_show):
     for ix in range(len(cxt.ellipsoid_plots)):
-        alpha = 1 if ix in ellipses_to_show else .1
+        alpha = 0 if ix in ellipses_to_show else 0
         cxt.ellipsoid_plots[ix].set_alpha(alpha)
     
 
@@ -60,9 +60,11 @@ def plot_environment(ax, env):
         polygon = patches.Polygon(vertex_list, True)
         patch_list.append(polygon)
 
-    p = PatchCollection(patch_list, cmap=matplotlib.cm.jet, alpha=0.4)
+    #p = PatchCollection(patch_list, cmap=matplotlib.cm.jet, alpha=0.4)
+    p = PatchCollection(patch_list, alpha=1)
 
-    colors = 100*np.random.rand(len(patch_list))
+    #colors = 100*np.random.rand(len(patch_list))
+    colors = 100*np.ones(len(patch_list))
     p.set_array(np.array(colors))
 
     ax.add_collection(p)
@@ -110,7 +112,7 @@ def initial_plot_target_group(ax, group):
     scatter_list = []
     cxt = TargetPlotCxt()
     for t in group.agent_list:
-        l = ax.scatter(t.position[0], t.position[1])
+        l = ax.scatter(t.position[0], t.position[1], color='r')
         cxt.target_scatter_list.append(l)
 
         tri_corners = generate_triangle_pts(t)

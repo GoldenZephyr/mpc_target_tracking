@@ -7,7 +7,7 @@ import numpy as np
 
 import casadi as cd
 from ilp import generate_assignments
-from utils import check_view, update_switch, predict_target, mvee, rollout, compute_viewpoint_ref
+from utils import check_view, update_switch_viewpoint, predict_target, mvee, rollout, compute_viewpoint_ref
 
 #from targets import TargetGroup
 from agents import AgentGroup, DefaultTargetParams, DefaultTrackerParams
@@ -18,6 +18,8 @@ from dynamics import update_agents, step
 
 from mpc_obs_functions import *
 
+from environment import calculate_net_obstacle_forces
+
 
 no_video = False
 n_targets = 10
@@ -25,7 +27,7 @@ n_trackers = 1
 assignment_type = 'TSP'
 
 keep_going = True
-np.random.seed(3)
+np.random.seed(4)
 
 
 solver_comp = cd.nlpsol('solver', 'ipopt', './nlp_iris_2.so', {'print_time':0, 'ipopt.print_level' : 0, 'ipopt.max_cpu_time': 0.2})
@@ -57,8 +59,10 @@ switch_ix = 39
 
 w0 = cd.vertcat(np.random.random(282))
 bounds = cd.inf
-lbw = np.array([-bounds, -bounds, -cd.inf, 0, -cd.pi/4.0, -1, -2])
-ubw = np.array([bounds, bounds, cd.inf, 3, cd.pi/4.0, 1, 2])
+#lbw = np.array([-bounds, -bounds, -cd.inf, 0, -cd.pi/4.0, -1, -2])
+#ubw = np.array([bounds, bounds, cd.inf, 3, cd.pi/4.0, 1, 2])
+lbw = np.array([-bounds, -bounds, -cd.inf, 0, -3, -1, -2])
+ubw = np.array([bounds, bounds, cd.inf, 3, 3, 1, 2])
 
 lbw = np.tile(lbw, (41, 1)).flatten()[5:]
 ubw = np.tile(ubw, (41, 1)).flatten()[5:]
@@ -208,7 +212,7 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
             # wp_next is the following intersection waypoint
             print('\n\n Case 3 \n\n')
             wp_now = np.tile(np.hstack((waypoints[0], [0])), (40,1))
-            wp_next = np.tile(np.hstack((waypoints[1], [0])), (40,1))
+            wp_next = np.hstack((waypoints[1], [0]))
             travel_weight = 1
             A = shape_matrices[0]
             a = offsets[0]
@@ -250,7 +254,7 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
         tracker.control[:2] = controls[:]
         trackers.synchronize_state()
        
-        tracker.params.switch_ix = update_switch(targets, w0, current_target_ix, switch_ix) 
+        tracker.params.switch_ix = update_switch_viewpoint(wp_now, w0, switch_ix) 
 
         traj_pad = np.hstack([np.zeros(5), np.array(w0).flatten()])
         traj_mat = np.reshape(traj_pad, (41, 7))
@@ -330,6 +334,11 @@ def update(i):
     for t in targets.agent_list:
         t.linear_acceleration[0] =  (np.random.random() - 0.5)
         t.angular_acceleration[0] = 3 * (np.random.random() - 0.5)
+        pt = t.position[:2]
+        theta = t.unicycle_state[2]
+        ptdir = np.array([np.cos(theta), np.sin(theta)])
+        force = calculate_net_obstacle_forces(env, pt, ptdir)
+        t.angular_acceleration[0] += force
     targets.synchronize_state()
 
     # Update plotting
@@ -347,7 +356,7 @@ if no_video:
 else:
     Writer = animation.writers['ffmpeg']
     writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
-    #ani = animation.FuncAnimation(fig, update, range(1, 2000), interval=1000, blit=False)
-    #plt.show()
-    ani = animation.FuncAnimation(fig, update, frames=gen, blit=True, save_count=3000)
-    ani.save('videos/temp.mp4', writer=writer)
+    ani = animation.FuncAnimation(fig, update, frames = gen, interval=500, blit=False)
+    plt.show()
+    #ani = animation.FuncAnimation(fig, update, frames=gen, blit=True, save_count=3000)
+    #ani.save('videos/obs_tracking_larger_noellipse.mp4', writer=writer)

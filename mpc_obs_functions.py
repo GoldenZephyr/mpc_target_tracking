@@ -11,7 +11,7 @@ def construct_environment(n_obs, bound):
     """ Makes an environment of random triangles """
     obstacles = []
     for ix in range(n_obs):
-        verts = 2 * (np.random.rand(3,2) - 0.5)
+        verts = 5 * (np.random.rand(3,2) - 0.5)
         verts += bound*(np.random.rand(1,2) - 0.5)
         obstacles.append(verts)
     env = Environment(obstacles, [[-bound, -bound], [bound, bound]])
@@ -25,8 +25,8 @@ def construct_ellipse_space(env):
     x = np.linspace(min_bounds[0] + 1, max_bounds[0] - 1, 30)
     y = np.linspace(min_bounds[1] + 1, max_bounds[1] - 1, 30)
 
-    x = np.linspace(-8, 8, 30)
-    y = np.linspace(-8, 8, 30)
+    #x = np.linspace(-8, 8, 30)
+    #y = np.linspace(-8, 8, 30)
 
     xv, yv = np.meshgrid(x, y)
     xv = xv.ravel()
@@ -84,12 +84,20 @@ def construct_ellipse_topology(M_list, center_list):
 
 
 def find_ellipses_for_point(M_list, center_list, point):
+    #indices = []
+    distances = np.zeros(len(M_list))
     for ix in range(len(M_list)):
         dist = (point - center_list[ix]) @ M_list[ix] @ (point - center_list[ix])[:,None]
-        if dist < 1.:
-            return ix
+        distances[ix] = dist
+        #if dist < 1.:
+        #    indices.append(ix)
+    indices = np.argwhere(distances < 1.)
+    if len(indices) > 0:
+        return np.squeeze(indices)
+    else:
+        return np.argmin(distances)
 
-    return None
+    #return indices
 
 
 def find_ellipsoid_path(graph, M_list, center_list, start, end):

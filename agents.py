@@ -16,7 +16,7 @@ class DefaultTrackerParams:
 class DefaultTargetParams:
     def __init__(self):
         self.min_velocity = np.array([0])
-        self.max_velocity = np.array([1.5])
+        self.max_velocity = np.array([0.5])
         self.min_angular_velocity = np.array([-np.pi/15.0])
         self.max_angular_velocity = np.array([np.pi/15.0])
         self.information_angle = 0.0
