@@ -50,7 +50,7 @@ class EnvironmentPlotCxt:
 
 def update_plot_environment(cxt, ellipses_to_show):
     for ix in range(len(cxt.ellipsoid_plots)):
-        alpha = 0 if ix in ellipses_to_show else 0
+        alpha = 1 if ix in ellipses_to_show else 0
         cxt.ellipsoid_plots[ix].set_alpha(alpha)
     
 

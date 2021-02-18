@@ -23,11 +23,11 @@ from environment import calculate_net_obstacle_forces
 
 no_video = False
 n_targets = 10
-n_trackers = 1
+n_trackers = 3
 assignment_type = 'TSP'
 
 keep_going = True
-np.random.seed(4)
+np.random.seed(5)
 
 
 solver_comp = cd.nlpsol('solver', 'ipopt', './nlp_iris_2.so', {'print_time':0, 'ipopt.print_level' : 0, 'ipopt.max_cpu_time': 0.2})
@@ -85,47 +85,56 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
 
     t0 = time.time()
 
-    if pre_assignments is None:
-        if 'ILP' in assignment_type:
-            if 'KNN' in assignment_type:
-                positions_to_visit = targets.unicycle_state[targets_responsible, :2] 
-                tracker_position = tracker.state[:2]
-                deltas = positions_to_visit - tracker_position
-                distances = np.linalg.norm(deltas, axis=1)
-                k = 10
-                k_closest_ix = np.argsort(distances)[:k]
-                knn_map = np.arange(len(targets_responsible))[k_closest_ix]
-                target_positions = targets.unicycle_state[targets_responsible[k_closest_ix]]
-            else:
-                target_positions = targets.unicycle_state[targets_responsible]
-                knn_map = np.arange(len(target_positions))
-            (path_assignments, path_positions) = generate_assignments(target_positions, targets.agent_list[0].params, tracker.state[:2])
-            assignments = [targets_responsible[knn_map[p]] for p in path_assignments]
-        elif assignment_type == 'ELL':
-            target_rollouts = np.zeros((len(targets_responsible), 2))
-            for ix in range(len(targets_responsible)):
-                _, p = rollout(targets.agent_list[targets_responsible[ix]].unicycle_state, targets.agent_list[targets_responsible[ix]].params, 100, .1)
-                target_rollouts[ix] = p[-1]
-            volumes = np.zeros(len(targets_responsible))
-            for ix in range(len(targets_responsible)):
-                d = np.linalg.norm(tracker.state[:2] - targets.unicycle_state[targets_responsible[ix], :2])
-                t = d / tracker.params.max_velocity[0]
-                #ix_other = targets_responsible[:ix] + targets_responsible[ix+1:]
-                ix_other = [j for j in range(ix)] + [j for j in range(ix+1, len(targets_responsible))]
-                positions_other = target_rollouts[ix_other, :2]
-                A, c = mvee(positions_other)
-                volumes[ix] = np.linalg.det(A)
-                assignments = [targets_responsible[np.argmin(volumes)]]
-        elif assignment_type == 'TSP':
-            remaining_target_positions = targets.pose[targets_responsible,:2]
-            tsp_sol = solve_tsp(remaining_target_positions, tracker.state[:2], 'tracker_%d_tsp.tsp' % tracker.index)
-            assignments = [targets_responsible[p] for p in tsp_sol]
+    if 'ILP' in assignment_type:
+        if 'KNN' in assignment_type:
+            positions_to_visit = targets.unicycle_state[targets_responsible, :2] 
+            tracker_position = tracker.state[:2]
+            deltas = positions_to_visit - tracker_position
+            distances = np.linalg.norm(deltas, axis=1)
+            k = 10
+            k_closest_ix = np.argsort(distances)[:k]
+            knn_map = np.arange(len(targets_responsible))[k_closest_ix]
+            target_positions = targets.unicycle_state[targets_responsible[k_closest_ix]]
         else:
-            raise Exception('Unknown planner type %s' % assignment_type)
+            target_positions = targets.unicycle_state[targets_responsible]
+            knn_map = np.arange(len(target_positions))
+        (path_assignments, path_positions) = generate_assignments(target_positions, targets.agent_list[0].params, tracker.state[:2])
+        assignments = [targets_responsible[knn_map[p]] for p in path_assignments]
+    elif assignment_type == 'ELL':
+        target_rollouts = np.zeros((len(targets_responsible), 2))
+        for ix in range(len(targets_responsible)):
+            _, p = rollout(targets.agent_list[targets_responsible[ix]].unicycle_state, targets.agent_list[targets_responsible[ix]].params, 100, .1)
+            target_rollouts[ix] = p[-1]
+        volumes = np.zeros(len(targets_responsible))
+        for ix in range(len(targets_responsible)):
+            d = np.linalg.norm(tracker.state[:2] - targets.unicycle_state[targets_responsible[ix], :2])
+            t = d / tracker.params.max_velocity[0]
+            #ix_other = targets_responsible[:ix] + targets_responsible[ix+1:]
+            ix_other = [j for j in range(ix)] + [j for j in range(ix+1, len(targets_responsible))]
+            positions_other = target_rollouts[ix_other, :2]
+            A, c = mvee(positions_other)
+            volumes[ix] = np.linalg.det(A)
+            assignments = [targets_responsible[np.argmin(volumes)]]
+    elif assignment_type == 'TSP':
+        remaining_target_positions = targets.pose[targets_responsible,:2]
+        tsp_sol = solve_tsp(remaining_target_positions, tracker.state[:2], 'tracker_%d_tsp.tsp' % tracker.index)
 
-        print('HLP took %f seconds' % (time.time() - t0))
+        if pre_assignments is not None and len(pre_assignments) > 0 and len(tsp_sol) > 0:
+            pos_last = targets.agent_list[pre_assignments[0]].unicycle_state[:2]
+            pos_now = tracker.unicycle_state[:2]
+            dist_last = np.linalg.norm(pos_last - pos_now)
+            pos_proposed = targets.agent_list[targets_responsible[tsp_sol[0]]].unicycle_state[:2]
+            dist_proposed = np.linalg.norm(pos_proposed - pos_now)
+            if dist_proposed < dist_last:
+                assignments = [targets_responsible[p] for p in tsp_sol]
+            else:
+                assignments = pre_assignments
+        else:
+            assignments = [targets_responsible[p] for p in tsp_sol]
     else:
-        assignments = pre_assignments
+        raise Exception('Unknown planner type %s' % assignment_type)
+
+    print('HLP took %f seconds' % (time.time() - t0))
 
     if len(assignments) > 0:
         current_target_ix = assignments[0]
@@ -271,6 +280,8 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
         # there are no more targets assigned to this agent
         w0 = cd.vertcat(np.random.random(282))
         move_on = False
+        ell1_ix = -1
+        ell2_ix = -1
 
     return assignments, w0, move_on, [ell1_ix, ell2_ix]
 
@@ -282,11 +293,14 @@ weights_2 = cd.DM.zeros(40)
 
 need_visit_list = [True] * n_targets
 
+terminal_frames = 0
 def gen():
-    global keep_going
+    global keep_going, terminal_frames
     i = 0
-    while keep_going:
+    while terminal_frames < 40:
         i += 1
+        if not keep_going:
+            terminal_frames += 1
         print('\n\n\n',i,'\n\n\n')
         yield i
 
@@ -300,6 +314,14 @@ def update(i):
 
     n_trackers = len(trackers.agent_list)
     targets_per_tracker = [[ix_map[jx] for jx in np.where(target_to_tracker == ix)[0]] for ix in range(n_trackers)] # list of targets for each 
+
+
+    n_per_tracker = [len(t) for t in targets_per_tracker]
+    if max(n_per_tracker) > 0:
+        for ix in range(len(targets_per_tracker)):
+            if len(targets_per_tracker[ix]) == 0:
+                target_dists = [np.linalg.norm(targets.agent_list[jx].state[:2] - trackers.agent_list[ix].state[:2]) for jx in ix_map]
+                targets_per_tracker[ix] = [ix_map[np.argmin(target_dists)]]
 
     t0 = time.time()
     ellipse_indices = []
@@ -355,8 +377,8 @@ if no_video:
         update(ix)
 else:
     Writer = animation.writers['ffmpeg']
-    writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
-    ani = animation.FuncAnimation(fig, update, frames = gen, interval=500, blit=False)
-    plt.show()
-    #ani = animation.FuncAnimation(fig, update, frames=gen, blit=True, save_count=3000)
-    #ani.save('videos/obs_tracking_larger_noellipse.mp4', writer=writer)
+    writer = Writer(fps=8, metadata=dict(artist='Me'), bitrate=1800)
+    #ani = animation.FuncAnimation(fig, update, frames = gen, interval=700, blit=False)
+    #plt.show()
+    ani = animation.FuncAnimation(fig, update, frames=gen, blit=True, save_count=3000)
+    ani.save('videos/obs_tracking_multi3.mp4', writer=writer)

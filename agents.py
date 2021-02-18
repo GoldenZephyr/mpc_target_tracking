@@ -9,6 +9,10 @@ class DefaultTrackerParams:
         self.max_velocity = np.array([3])
         self.min_angular_velocity = np.array([-3])
         self.max_angular_velocity = np.array([3])
+        self.min_angular_acceleration = -2
+        self.max_angular_acceleration = 2
+        self.min_linear_acceleration = -1
+        self.max_linear_acceleration = 1
         self.switch_ix = 39
         self.ellipse_switch_ix = 40
         self.ellipse_switch_pair = [-1, -1]

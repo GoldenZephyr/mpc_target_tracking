@@ -39,19 +39,19 @@ def generate_collocation_functions(nx, nu):
 
 # defining loss function -- want to be in desired cone
 target_prediction = cd.MX.sym('target_pred', 3*40)
-target_state = cd.MX.sym('target', 3)
+target_state = cd.SX.sym('target', 3)
 #target_state = target_prediction[:3]
-tracker_state = cd.MX.sym('tracker_state', n_state)
-control_input = cd.MX.sym('ctrl', n_control)
+tracker_state = cd.SX.sym('tracker_state', n_state)
+control_input = cd.SX.sym('ctrl', n_control)
 
 target_1_weights = cd.MX.sym('target_1_weights', 40)
 target_2_weights = cd.MX.sym('target_2_weights', 40)
-collision_weights_1 = cd.MX.sym('collision_weights_1', 40)
-collision_weights_2 = cd.MX.sym('collision_weights_2', 40)
-coll_weights_1 = cd.DM.ones(40)
-coll_weights_1[20:] = cd.inf
-coll_weights_2 = cd.DM.ones(40)
-coll_weights_2[:20] = cd.inf
+#collision_weights_1 = cd.MX.sym('collision_weights_1', 40)
+#collision_weights_2 = cd.MX.sym('collision_weights_2', 40)
+#coll_weights_1 = cd.DM.ones(40)
+#coll_weights_1[20:] = cd.inf
+#coll_weights_2 = cd.DM.ones(40)
+#coll_weights_2[:20] = cd.inf
 w_travel = cd.MX.sym('w_travel')
 
 x_diff = tracker_state[:2] - target_state[:2]
@@ -62,6 +62,7 @@ target_heading = cd.vertcat(cd.cos(target_state[2]), cd.sin(target_state[2]))
 cos_theta = cd.dot(x_diff_heading, target_heading)
 cost_viewpoint = -cos_theta + cd.sqrt(3)/2.0 + .001 * cd.norm_2(control_input)**2 + .5 * (cd.norm_2(x_diff)**2 - 1)**2
 cost_travel = cd.norm_2(x_diff)**2 + .1 * cd.norm_2(control_input)**2
+#cost_travel = cd.mmin(cd.vertcat(cd.norm_2(x_diff)**2, .5)) + .1 * cd.norm_2(control_input)**2
 #cost = cd.norm_2(tracker_state[:2] - target_state[:2])**2 + .01*cd.norm_2(control_input)**2
 
 
@@ -69,7 +70,7 @@ l_travel = cd.Function('l', [target_state, tracker_state, control_input], [cost_
 l_viewpoint = cd.Function('l', [target_state, tracker_state, control_input], [cost_viewpoint])
 
 # terminal cost
-next_target_state = cd.MX.sym('target', 3)
+next_target_state = cd.SX.sym('target', 3)
 x_diff_terminal = tracker_state[:2] - next_target_state[:2]
 x_diff_heading_terminal = x_diff_terminal / cd.norm_2(x_diff_terminal)
 
@@ -112,6 +113,7 @@ lbw += [-1, -2]
 ubw += [1, 2]
 w0 += [.1, .1]
 
+next_target_state = cd.MX.sym('target', 3)
 
 for k in range(N):
     loss += w_travel * target_1_weights[k] * l_travel(target_prediction[3*k:3*k+3], Xk, Uk)
