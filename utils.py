@@ -4,6 +4,59 @@ from scipy.optimize import minimize_scalar
 from scipy.linalg import eigh
 import irispy
 
+def constrain_velocity(vel_desired, p0, A, a):
+    speed_desired = np.linalg.norm(vel_desired)
+    dir_desired = vel_desired / speed_desired
+    r = float((p0 - a) @ A @ (p0 - a)[:,None])
+    k = 5
+    cbf = k * (1 - r)
+    spd_cmd = min(cbf, speed_desired)
+    return spd_cmd * dir_desired
+
+def compute_pf_control(tracker, v_desired):
+    speed_desired = np.linalg.norm(v_desired)
+    direction_desired = v_desired / speed_desired
+    cos_desired = direction_desired[0]
+    sin_desired = direction_desired[1]
+    pos = tracker.unicycle_state[:2]
+    theta = tracker.unicycle_state[2]
+    cos_now = np.cos(theta)
+    sin_now = np.sin(theta)
+    vel = tracker.unicycle_state[3]
+    min_lin_acc = tracker.params.min_linear_acceleration
+    max_lin_acc = tracker.params.max_linear_acceleration
+    min_ang_acc = tracker.params.min_angular_acceleration
+    max_ang_acc = tracker.params.max_angular_acceleration
+    pos = tracker.unicycle_state[:2]
+    theta = tracker.unicycle_state[2]
+    omega = tracker.unicycle_state[4]
+    direction = np.array([np.cos(theta), np.sin(theta)])
+    vel = tracker.unicycle_state[3]
+    min_lin_acc = tracker.params.min_linear_acceleration
+    max_lin_acc = tracker.params.max_linear_acceleration
+    min_ang_acc = tracker.params.min_angular_acceleration
+    max_ang_acc = tracker.params.max_angular_acceleration
+    
+
+    qminusp = np.array([cos_now, sin_now]) - direction_desired
+    dist = np.linalg.norm(qminusp)
+    #ddtheta = np.dot(qminusp, np.array([sin_now, -cos_now]))
+    ddtheta = np.dot(qminusp, np.array([-sin_now, cos_now]))
+    if ddtheta > 0:
+        alpha = dist * min_ang_acc
+    else:
+        alpha = dist * max_ang_acc
+
+    alpha += - 2*omega * abs(omega)
+
+    if vel < speed_desired and dist < np.sqrt(2):
+        acceleration = abs(vel - speed_desired) * max_lin_acc
+    else:
+        acceleration = abs(vel - speed_desired) * min_lin_acc
+
+    return np.array([acceleration, alpha])
+
+    
 
 def compute_viewpoint_ref(target):
     pos = target.unicycle_state[:2]
@@ -102,6 +155,23 @@ def check_view(tracker, targets, target_ix):
         return True
     else:
         return False
+
+
+def update_switch_waypoint(target_traj, traj, switch_ix):
+    traj_pad = np.hstack([np.zeros(5), np.array(traj).flatten()])
+    traj_mat = np.reshape(traj_pad, (41, 7))
+    pos = traj_mat[1:, 0:2]
+
+    target_pos = target_traj[:,:2]
+    pos_diff = pos - target_pos
+    dists = np.linalg.norm(pos_diff, axis=1)
+    
+    new_ix = np.argmax(dists < .5)
+    if new_ix == 0:
+        return min(switch_ix + 3, 39)
+    else:
+        return new_ix + 1 # +1 is just a little buffer, not technically necessary
+
 
 def update_switch_viewpoint(target_traj, traj, switch_ix):
     traj_pad = np.hstack([np.zeros(5), np.array(traj).flatten()])

@@ -14,6 +14,7 @@ def cxt_to_artists(targets, trackers):
     artists += trackers.tracker_scatter_list
     artists += trackers.track_list
     artists += trackers.traj_plots
+    artists += trackers.heading_plots
     return artists
 
 
@@ -26,6 +27,7 @@ class TargetPlotCxt:
 class TrackerPlotCxt:
     def __init__(self):
         self.tracker_scatter_list = []
+        self.heading_plots = []
         self.track_list = []
         self.traj_plots = []
         self.tsp_plots = []
@@ -50,7 +52,7 @@ class EnvironmentPlotCxt:
 
 def update_plot_environment(cxt, ellipses_to_show):
     for ix in range(len(cxt.ellipsoid_plots)):
-        alpha = 1 if ix in ellipses_to_show else 0
+        alpha = 0 if ix in ellipses_to_show else 0
         cxt.ellipsoid_plots[ix].set_alpha(alpha)
     
 
@@ -106,6 +108,9 @@ def initial_plot_tracker_group(ax, trackers):
         l5 = ax.scatter([], [], color='m')
         cxt.mpcc_points.append(l5)
 
+        l6 = ax.plot([],[], color='k')[0]
+        cxt.heading_plots.append(l6)
+
     return cxt
 
 def initial_plot_target_group(ax, group):
@@ -137,7 +142,7 @@ def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp_orde
         ys = [tracker_position[1], target_position[1]]
         cxt.track_list[ix].set_data(xs, ys)
 
-        if index_asgn[ix] is None:
+        if index_asgn[ix] is None or len(trajectories[ix]) == 0:
             xs = [t.position[0]]
             ys = [t.position[1]]
         else:
@@ -157,6 +162,15 @@ def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp_orde
 
         if mpcc_points is not None:
             cxt.mpcc_points[ix].set_offsets(mpcc_points[ix])
+
+        pos = t.position[:2]
+        theta = t.unicycle_state[2]
+        direction = np.array([np.cos(theta), np.sin(theta)])
+        p1 = pos
+        p2 = pos + direction
+        pts = np.vstack([p1, p2])
+        cxt.heading_plots[ix].set_data(pts[:,0], pts[:,1])
+
 
 def update_plot_target_group(group, cxt):
     for (ix, t) in enumerate(group.agent_list):

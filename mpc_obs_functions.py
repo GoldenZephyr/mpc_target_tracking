@@ -17,6 +17,45 @@ def construct_environment(n_obs, bound):
     env = Environment(obstacles, [[-bound, -bound], [bound, bound]])
     return env
 
+def construct_environment_blocks(bound):
+    block_base = 3 * np.array([[0,0], [0,1], [1,1], [1,0]])
+
+    obstacles = []
+
+    offsets = [-9, -2, 5, 12]
+    for o1 in offsets:
+        xoff = np.zeros((4,2))
+        xoff[:,0] = o1
+        for o2 in offsets:
+            yoff = np.zeros((4,2))
+            yoff[:,1] = o2
+            obstacles.append(block_base + xoff + yoff)
+
+    env = Environment(obstacles, [[-bound, -bound], [bound, bound]])
+    return env
+
+def construct_environment_forest(bound):
+
+
+    # we do this so that the randomness to generate this environment
+    # is decoupled from other randomness
+    rng_state = np.random.get_state()
+    np.random.seed(2)
+    thetas = np.linspace(0,2*np.pi, 12)
+    unit_circle = np.array([np.cos(thetas), np.sin(thetas)]).T
+    obstacles = []
+    for ix in range(20):
+        center = 20 * (np.random.random(2) - 0.5)
+        radius = 3 * np.random.random()
+        obs = radius*unit_circle + center
+        obstacles.append(obs)
+
+    np.random.set_state(rng_state)
+
+    env = Environment(obstacles, [[-bound, -bound], [bound, bound]])
+    return env
+            
+
 # 2) Ellipse space construction
 def construct_ellipse_space(env):
 

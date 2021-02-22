@@ -7,7 +7,7 @@ import numpy as np
 
 import casadi as cd
 from ilp import generate_assignments
-from utils import check_view, update_switch_viewpoint, predict_target, mvee, rollout, compute_viewpoint_ref
+from utils import check_view, update_switch_viewpoint, update_switch_waypoint, predict_target, mvee, rollout, compute_viewpoint_ref, compute_pf_control, constrain_velocity
 
 #from targets import TargetGroup
 from agents import AgentGroup, DefaultTargetParams, DefaultTrackerParams
@@ -23,11 +23,12 @@ from environment import calculate_net_obstacle_forces
 
 no_video = False
 n_targets = 10
-n_trackers = 3
+n_trackers = 2
 assignment_type = 'TSP'
+controller_type = 'MPC' # vs. 'MPC'
 
 keep_going = True
-np.random.seed(5)
+np.random.seed(3)
 
 
 solver_comp = cd.nlpsol('solver', 'ipopt', './nlp_iris_2.so', {'print_time':0, 'ipopt.print_level' : 0, 'ipopt.max_cpu_time': 0.2})
@@ -36,8 +37,12 @@ solver_comp = cd.nlpsol('solver', 'ipopt', './nlp_iris_2.so', {'print_time':0, '
 #targets = TargetGroup(n_targets, [-5,-5,-5], [5,5,5])
 targets = AgentGroup(n_targets, [-5,-5,-5], [5,5,5], DefaultTargetParams())
 trackers = AgentGroup(n_trackers, [-5,-5,-5,], [5,5,5], DefaultTrackerParams())
+trackers.agent_list[0].unicycle_state[0] = -4
+trackers.synchronize_state()
 
-env = construct_environment(10, 10)
+#env = construct_environment(10, 10)
+#env = construct_environment_blocks(15)
+env = construct_environment_forest(15)
 region_list, M_list, C_list, center_list = construct_ellipse_space(env)
 ellipse_graph = construct_ellipse_topology(M_list, center_list)
 
@@ -79,7 +84,8 @@ mpc_guesses = [w0] * n_trackers
 
 assignment_ix = [0]*n_trackers
 current_target_indices = [0]*n_trackers
-trajectories = [0] * n_trackers
+#trajectories = [0] * n_trackers
+trajectories = [[] for _ in range(n_trackers)]
 last_assignment = [None] * n_trackers
 def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_guess, pre_assignments):
 
@@ -143,8 +149,7 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
         else:
             next_target_ix = assignments[0]
 
-
-        move_on = check_view(tracker, targets, current_target_ix) 
+        move_on = check_view(tracker, targets, current_target_ix) ## TODO: move this
 
         if move_on:
             tracker.params.switch_ix = 39
@@ -233,48 +238,91 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
         if not sorted([ell1_ix, ell2_ix]) == tracker.params.ellipse_switch_pair:
             tracker.params.ellipse_switch_pair = sorted([ell1_ix, ell2_ix])
             tracker.params.ellipse_switch_ix = 40
+            tracker.params.switch_ix = 39
 
-        ellipse_switch_ix = tracker.params.ellipse_switch_ix
 
-        print('Viz ref: ', viewpoint_ref)
-        print('ellipse switch index: ', ellipse_switch_ix)
-        ubg[:ellipse_switch_ix, 5] = 1
-        ubg[:ellipse_switch_ix, 6] = np.inf
-        ubg[ellipse_switch_ix:, 5] = np.inf
-        ubg[ellipse_switch_ix:, 6] = 1
+        if controller_type == 'MPC':
+            ellipse_switch_ix = tracker.params.ellipse_switch_ix
 
-        #weights_1[0:ellipse_switch_ix] = 1
-        #weights_1[ellipse_switch_ix:] = 0
-        #weights_2[0:ellipse_switch_ix] = 0
-        #weights_2[ellipse_switch_ix:] = 1
+            print('Viz ref: ', viewpoint_ref)
+            print('ellipse switch index: ', ellipse_switch_ix)
+            ubg[:ellipse_switch_ix, 5] = 1
+            ubg[:ellipse_switch_ix, 6] = np.inf
+            ubg[ellipse_switch_ix:, 5] = np.inf
+            ubg[ellipse_switch_ix:, 6] = 1
 
-        switch_ix = tracker.params.switch_ix
-        weights_1[0:switch_ix] = 1
-        weights_1[switch_ix:] = 0
-        weights_2[0:switch_ix] = 0
-        weights_2[switch_ix:] = 1
+            #weights_1[0:ellipse_switch_ix] = 1
+            #weights_1[ellipse_switch_ix:] = 0
+            #weights_2[0:ellipse_switch_ix] = 0
+            #weights_2[ellipse_switch_ix:] = 1
 
-        # Solve MPC
-        target_prediction = predict_target(targets.agent_list[current_target_ix])
-        sol = solver_comp(x0=mpc_guess, lbx=lbw, ubx=ubw, lbg=lbg.flatten(), ubg=ubg.flatten(), p=cd.vertcat(tracker.unicycle_state_mpc, wp_now.flatten(), wp_next, weights_1, weights_2, A.flatten(), B.flatten(), a, b, travel_weight))
-        w0 = sol['x']
+            switch_ix = tracker.params.switch_ix
+            weights_1[0:switch_ix] = 1
+            weights_1[switch_ix:] = 0
+            weights_2[0:switch_ix] = 0
+            weights_2[switch_ix:] = 1
 
-        controls = np.array(sol['x'][:2]).flatten()
-        tracker.control[:2] = controls[:]
-        trackers.synchronize_state()
-       
-        tracker.params.switch_ix = update_switch_viewpoint(wp_now, w0, switch_ix) 
+            # Solve MPC
+            target_prediction = predict_target(targets.agent_list[current_target_ix])
+            sol = solver_comp(x0=mpc_guess, lbx=lbw, ubx=ubw, lbg=lbg.flatten(), ubg=ubg.flatten(), p=cd.vertcat(tracker.unicycle_state_mpc, wp_now.flatten(), wp_next, weights_1, weights_2, A.flatten(), B.flatten(), a, b, travel_weight))
+            w0 = sol['x']
 
-        traj_pad = np.hstack([np.zeros(5), np.array(w0).flatten()])
-        traj_mat = np.reshape(traj_pad, (41, 7))
+            controls = np.array(sol['x'][:2]).flatten()
+            tracker.control[:2] = controls[:]
+            trackers.synchronize_state()
+           
+            if travel_weight == 0:
+                tracker.params.switch_ix = update_switch_viewpoint(wp_now, w0, switch_ix) 
+            else:
+                tracker.params.switch_ix = update_switch_waypoint(wp_now, w0, switch_ix)
 
-        for jx in range(1, len(traj_mat)):
-            pos = traj_mat[jx, :2]
-            rad = (pos - b) @ B @ (pos - b)[:,None]
-            if rad < 1:
-                ellipse_switch_ix = min(len(traj_mat), jx + 1)
-                break
-        tracker.params.ellipse_switch_ix = ellipse_switch_ix
+            traj_pad = np.hstack([np.zeros(5), np.array(w0).flatten()])
+            traj_mat = np.reshape(traj_pad, (41, 7))
+
+            for jx in range(1, len(traj_mat)):
+                pos = traj_mat[jx, :2]
+                rad = (pos - b) @ B @ (pos - b)[:,None]
+                if rad < 1:
+                    ellipse_switch_ix = min(len(traj_mat), jx + 1)
+                    break
+            tracker.params.ellipse_switch_ix = ellipse_switch_ix
+        elif controller_type == 'PF':
+            if travel_weight == 1:
+                # we are traveling to a waypoint
+                wp = wp_now[0]
+                pos = tracker.state[:2]
+                vec_to_wp = wp[:2] - pos
+                d = np.linalg.norm(vec_to_wp)
+                k = 1.
+                vel_desired = (.5 + k*d) * vec_to_wp / d
+            else:
+                # we are trying to view the target
+                wp = compute_viewpoint_ref(targets.agent_list[current_target_ix])
+                wp_dir = wp - targets.agent_list[current_target_ix].state[:2]
+                wp_dir = wp_dir / np.linalg.norm(wp_dir)
+                diff = tracker.state[:2] - targets.agent_list[current_target_ix].state[:2]
+                gradient = -np.matmul(np.outer(diff, diff), wp_dir) / (np.linalg.norm(diff)**3) + wp_dir / np.linalg.norm(diff) + 4 * diff * (np.linalg.norm(diff)**2 - 1)
+                #gradient = -np.matmul(np.outer(diff, diff), wp_dir) / (np.linalg.norm(diff)**3)
+                #gradient = 4 * diff * (np.linalg.norm(diff)**2 - 1)
+                #gradient = diff / np.linalg.norm(diff)
+                vel_desired = -gradient
+            print(vel_desired)
+            p0 = tracker.state[:2]
+            pf = p0 + vel_desired
+            vel_cmd = constrain_velocity(vel_desired, p0, A, a)
+            traj2d = np.zeros((41,7))
+            traj2d[:20, :2] = p0
+            traj2d[20:, :2] = pf
+            #w0 = traj2d.flatten()[5:]
+            w0 = []
+            controls = compute_pf_control(tracker, vel_desired)
+            tracker.control[:2] = controls
+            trackers.synchronize_state()
+            #ell1_ix = -1
+            #ell2_ix = -1
+            move_on = check_view(tracker, targets, current_target_ix) ## TODO: move this
+        else:
+            raise Exception('Unknown controller type %s' % controller_type)
 
     else:
         # there are no more targets assigned to this agent
@@ -338,7 +386,9 @@ def update(i):
         else:
             current_target_indices[ix] = None
         #trajectories[ix] = trajectory
-        trajectories[ix] = np.reshape(np.hstack([np.zeros(5), np.array(trajectory).flatten()]), (41,7))
+        trajectory = np.array(trajectory)
+        if len(trajectory) > 0:
+            trajectories[ix] = np.reshape(np.hstack([np.zeros(5), np.array(trajectory).flatten()]), (41,7))
         if move_on:
             need_visit_list[assignments[0]] = False
             last_assignment[ix] = None
@@ -353,6 +403,8 @@ def update(i):
 
     # update the targets with random motion
     update_agents(targets, 5.0/40)
+    print('update target')
+    #update_agents(targets, .01)
     for t in targets.agent_list:
         t.linear_acceleration[0] =  (np.random.random() - 0.5)
         t.angular_acceleration[0] = 3 * (np.random.random() - 0.5)
@@ -377,8 +429,8 @@ if no_video:
         update(ix)
 else:
     Writer = animation.writers['ffmpeg']
-    writer = Writer(fps=8, metadata=dict(artist='Me'), bitrate=1800)
-    #ani = animation.FuncAnimation(fig, update, frames = gen, interval=700, blit=False)
+    writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
+    #ani = animation.FuncAnimation(fig, update, frames = gen, interval=400, blit=False)
     #plt.show()
     ani = animation.FuncAnimation(fig, update, frames=gen, blit=True, save_count=3000)
-    ani.save('videos/obs_tracking_multi3.mp4', writer=writer)
+    ani.save('videos/forest_2.mp4', writer=writer)
