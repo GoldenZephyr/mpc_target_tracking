@@ -1,10 +1,26 @@
 import numpy as np
+import random
 from shapely import geometry
 from utils import call_irispy, ellipsoids_intersect, find_ellipse_intersection
 from scipy.sparse.csgraph import shortest_path
 from environment import Environment
 
+def sample_tracker_positions(M_list, center_list, n_trackers, sample_bound):
+    positions = []
+    indices = list(range(len(M_list)))
+    while len(positions) < n_trackers:
+        p = np.random.uniform(-sample_bound, sample_bound, size=2)
+    
+        random.shuffle(indices)
+        for ix in indices:
+            M = M_list[ix]
+            c = center_list[ix]
+            r = (c - p) @ M @ (c - p)[:,None]
+            if r < 1:
+                positions.append(p)
+                break
 
+    return positions
 
 # 1) spawn obstacles
 def construct_environment(n_obs, bound):
