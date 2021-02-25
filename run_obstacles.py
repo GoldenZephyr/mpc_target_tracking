@@ -36,7 +36,7 @@ solver_comp = cd.nlpsol('solver', 'ipopt', './nlp_iris_2.so', {'print_time':0, '
 
 #targets = TargetGroup(n_targets, [-5,-5,-5], [5,5,5])
 targets = AgentGroup(n_targets, [-5,-5,-5], [5,5,5], DefaultTargetParams())
-trackers = AgentGroup(n_trackers, [-5,-5,-5,], [5,5,5], DefaultTrackerParams())
+trackers = AgentGroup(n_trackers, [-5,-5,-5], [5,5,5], DefaultTrackerParams())
 trackers.agent_list[0].unicycle_state[0] = -4
 trackers.synchronize_state()
 
