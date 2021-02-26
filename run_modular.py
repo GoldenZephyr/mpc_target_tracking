@@ -76,6 +76,11 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
                 assignments = pre_assignments
         else:
             assignments = [targets_responsible[p] for p in tsp_sol]
+    elif assignment_type == 'NEAREST':
+        remaining_target_positions = targets.pose[targets_responsible,:2]
+        dists = [np.linalg.norm(p - tracker.unicycle_state[:2]) for p in remaining_target_positions]
+        visit_order = np.argsort(dists)
+        assignments = [targets_responsible[j] for j in visit_order]
     else:
         raise Exception('Unknown planner type %s' % assignment_type)
 
@@ -196,11 +201,14 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
             #weights_2[0:ellipse_switch_ix] = 0
             #weights_2[ellipse_switch_ix:] = 1
 
-            switch_ix = tracker.params.switch_ix
-            weights_1[0:switch_ix] = 1
-            weights_1[switch_ix:] = 0
-            weights_2[0:switch_ix] = 0
-            weights_2[switch_ix:] = 1
+            #switch_ix = tracker.params.switch_ix
+            #weights_1[0:switch_ix] = 1
+            #weights_1[switch_ix:] = 0
+            #weights_2[0:switch_ix] = 0
+            #weights_2[switch_ix:] = 1
+
+            weights_1[0:] = 1
+            weights_2[0:] = 0
 
             # Solve MPC
             target_prediction = predict_target(targets.agent_list[current_target_ix])
@@ -379,9 +387,10 @@ if __name__ == '__main__':
     domain = args[1]
     #n_targets = 10
     #n_trackers = 2
-    assignment_type = 'TSP'
+    #assignment_type = 'TSP'
+    assignment_type = 'NEAREST'
     controller_type = 'MPC'
-    generation = 1
+    generation = 2
 
     keep_going = True
     seed = int(time.time()*1000 % 2**31)
