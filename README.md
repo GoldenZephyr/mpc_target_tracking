@@ -2,92 +2,60 @@
 ===========================
 
 
-scratch todo
-------------
+To run the script, first run `python3 mpc_iris_2.py` to generate the MPC. Then,
+run `python3 run_obstacles.py`. This should generate an output video in the
+`videos` subdirectory. You can modify then number of targets and trackers in
+`run_obstacles.py`. 
 
-[x] prediction
-[x] distance
-[x] TSP high level plan
-    [x] write distance matrix to file
-    [x] call pytsp
-    [x] draw tsp
-[x] shot order ILP
-    [x] roll out predictions
-    [x] uniform random sampling of times
-    [x] build ilp -- clip based on expected distance
-    [x] solve + unroll assignment
-    [x] redo/reorder dummy variables in DAG
-    [x] put the pieces together
-    [x] demo with static agents
-    [x] plot test case
-[x] Video baselines
-    [x] TSP video
-    [x] ILP video
-    [x] ILP with KNN limitation
-[x] multi-tracker (naive division)
-[x] polish so it works all the way through
-[ ] record metrics about how long it takes
-[ ] simple additions to reduce assignment instability
+In general, I would re-implement the general MPC idea from here into your
+existing control stack. The core ideas are quite simple, and there are just a
+few functions that encapsulate the interesting parts. 
 
-At that point, have a simple proof of concept of the full stack.
-will need to:
-1) improve high level assignment
-2) investigate swaps
-3) port to drone sim (?)
+`mpc_obs_functions.py`
+======================
 
-Implementation Phases
-=====================
+This file has most of the relevant utility functions.
 
+`construct_ellipse_space`
+-------------------------
 
-Initial Functionality
+This takes an environment and decomposes the free space into ellipsoids. It
+makes a finely spaced lattice filling the space, and uses the IRIS library to
+generate ellipsoids such that all of the lattice points are covered.
+
+`construct_ellipse_topology`
+---------------------------
+
+After decomposing the free space into ellipsoids, store the connectivity of
+which ellipsoids intersect with each other.
+
+`find_ellipsoid_path`
 ---------------------
 
-The first part of the implementation is a simple environment baseline. 
-
-[x] simple high level plan
-[x] mpc terminal cost
-[x] target prediction
-[x] distance constraint
-[ ] casadi Map
-[ ] code cleanup / function docs
+Given the ellipsoid graph and a desired start and endpoint, finds the fewest
+number of ellipsoids to traverse from the start to end. Also generates a
+waypoint in the intersection of each pair of ellipsoids on the path.
 
 
-Solve the Tricky Pieces
------------------------
+`utils.py`
+==========
 
-This is where the kernel of innovation is. We need to constrain the tracker to
-enter the desired regions, and implement a smart high level plan.
+`fine_ellipse_intersection`
+---------------------------
+Given two ellipsoids, find a point in their intersection.
 
-[x] viewpoint constraint
-    * compare hard constraint vs "lyapunov" version
-    * consider alyssa's point about optimal boundary position
-[x] real high level plan
+`ellipsoids_intersect`
+----------------------
+Checking condition for whether two ellipsoids intersect.
 
+`mpc_iris_2.py`
+===============
 
-
-Multiagent Functionality
-------------------------
-
-[x] Dividing agent assignment
-[ ] swapping agent assignment
-
-
-Domain Functionality
---------------------
-
-We will also include support for obstacles in the environment. However, we will
-only support ellipsoidal obstacles. More complicated obstacles will be relegated
-to future work because they are too different from the existing codebase.
-
-[ ] Obstacles
-
-
-Julia Port
-----------
-
-It would be nice to port all of this to Julia to aide functionality. Julia seems
-to have very good python support (and the MPC definition could stay in python
-directly anyway), so it's just the rest of the sim that needs to be translated.
-
-
-
+Contains the MPC definition. Uses collocation method to enforce dynamics. You
+will see there are weights that specify which indices have a penalty for the
+primary goal and which have weights for the secondary goal. These are updated
+between iterations in `run_obstacles.py` (`weights_1` and `weights_2` and
+`switch_ix`). The active ellipsoid constraint is controlled by the ellipsoid
+shape matrices and centers A,B,a,b, and the switching between the two
+constraints is defined by the solver bounds `ubg` which are also updated between
+runs in `run_obstacles.py`. 

@@ -25,7 +25,7 @@ no_video = False
 n_targets = 10
 n_trackers = 2
 assignment_type = 'TSP'
-controller_type = 'MPC' # vs. 'MPC'
+controller_type = 'MPC'
 
 keep_going = True
 np.random.seed(3)
@@ -41,8 +41,8 @@ trackers.agent_list[0].unicycle_state[0] = -4
 trackers.synchronize_state()
 
 #env = construct_environment(10, 10)
-#env = construct_environment_blocks(15)
-env = construct_environment_forest(15)
+env = construct_environment_blocks(15)
+#env = construct_environment_forest(15)
 region_list, M_list, C_list, center_list = construct_ellipse_space(env)
 ellipse_graph = construct_ellipse_topology(M_list, center_list)
 
@@ -433,4 +433,4 @@ else:
     #ani = animation.FuncAnimation(fig, update, frames = gen, interval=400, blit=False)
     #plt.show()
     ani = animation.FuncAnimation(fig, update, frames=gen, blit=True, save_count=3000)
-    ani.save('videos/forest_2.mp4', writer=writer)
+    ani.save('videos/test316.mp4', writer=writer)
