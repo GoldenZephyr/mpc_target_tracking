@@ -116,7 +116,11 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
             # We will have the tracker stay in the current ellipse
             print('\n\n Case 0 (this is bad) \n\n') 
             this_ellipse, _, current_shape_matrix, current_offset = find_ellipsoid_path(ellipse_graph, M_list, center_list, tracker.unicycle_state[:2], tracker.unicycle_state[:2])
-            wp_now = predict_target(targets.agent_list[current_target_ix])
+
+            
+            ### TURNING OFF PREDICTION!
+            #wp_now = predict_target(targets.agent_list[current_target_ix])
+            wp_now = np.tile(targets.agent_list[current_target_ix].unicycle_state[:3], (40,1))
             wp_next = targets.agent_list[current_target_ix].unicycle_state[:3]
             A = current_shape_matrix[0]
             B = current_shape_matrix[0]
@@ -131,7 +135,10 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
             # wp_now is the target's predicted trajectory
             # wp_next is the intersection waypoint of the path to the following assignment
             print('\n\n Case 1 \n\n')
-            wp_now = predict_target(targets.agent_list[current_target_ix])
+
+            ### TURNING OFF PREDICTION!
+            #wp_now = predict_target(targets.agent_list[current_target_ix])
+            wp_now = np.tile(targets.agent_list[current_target_ix].unicycle_state[:3], (40,1))
             ellipse_path_next, wp_next, shape_matrices_next, offsets_next = find_ellipsoid_path(ellipse_graph, M_list, center_list, viewpoint_ref, compute_viewpoint_ref(targets.agent_list[next_target_ix]))
             if len(wp_next) > 0:
                 wp_next = np.hstack((wp_next[0], [0]))
@@ -196,22 +203,13 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, mpc_gue
             ubg[ellipse_switch_ix:, 5] = np.inf
             ubg[ellipse_switch_ix:, 6] = 1
 
-            #weights_1[0:ellipse_switch_ix] = 1
-            #weights_1[ellipse_switch_ix:] = 0
-            #weights_2[0:ellipse_switch_ix] = 0
-            #weights_2[ellipse_switch_ix:] = 1
-
-            #switch_ix = tracker.params.switch_ix
-            #weights_1[0:switch_ix] = 1
-            #weights_1[switch_ix:] = 0
-            #weights_2[0:switch_ix] = 0
-            #weights_2[switch_ix:] = 1
-
-            weights_1[0:] = 1
-            weights_2[0:] = 0
+            switch_ix = tracker.params.switch_ix
+            weights_1[0:switch_ix] = 1
+            weights_1[switch_ix:] = 0
+            weights_2[0:switch_ix] = 0
+            weights_2[switch_ix:] = 1
 
             # Solve MPC
-            target_prediction = predict_target(targets.agent_list[current_target_ix])
             t0 = time.time()
             sol = solver_comp(x0=mpc_guess, lbx=lbw, ubx=ubw, lbg=lbg.flatten(), ubg=ubg.flatten(), p=cd.vertcat(tracker.unicycle_state_mpc, wp_now.flatten(), wp_next, weights_1, weights_2, A.flatten(), B.flatten(), a, b, travel_weight))
             mpc_solve_times.append(time.time() - t0)
@@ -387,10 +385,10 @@ if __name__ == '__main__':
     domain = args[1]
     #n_targets = 10
     #n_trackers = 2
-    #assignment_type = 'TSP'
-    assignment_type = 'NEAREST'
+    assignment_type = 'TSP'
+    #assignment_type = 'NEAREST'
     controller_type = 'MPC'
-    generation = 2
+    generation = 8
 
     keep_going = True
     seed = int(time.time()*1000 % 2**31)
