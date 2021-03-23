@@ -1,0 +1,8 @@
+casadi  
+Mosek # please download academic license of this program and place it in "/home/user/mosek/***.lic"
+pyscipopt
+concorde
+urllib3
+cython
+git+https://github.com/jvkersch/pytsp.git
+Shapely
