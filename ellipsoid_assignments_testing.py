@@ -12,17 +12,18 @@ from shapely import geometry
 import irispy
 from visualization import EnvironmentPlotCxt
 
-
+# unchanged from utils
 def K_full(s, v, A_inv, B_inv):
     return 1 - v @ np.linalg.inv(A_inv / (1-s) + B_inv / s) @ v[:,None]
 
-
+# unchanged from utils
 def ellipsoids_intersect(A, B, a, b):
     # assumes ellipse of form (x - a)' A (x - a) < 1
     res = minimize_scalar(K_full, bounds=(0., 1.), args=(a - b, np.linalg.inv(A), np.linalg.inv(B)), method='bounded')
     return (res.fun >= 0)
 
 
+# unchanged from utils
 def call_irispy(env, seed):
     obs = [arr.T for arr in env.obstacles]
     bounds = irispy.Polyhedron.fromBounds(*env.bounds)
@@ -31,6 +32,7 @@ def call_irispy(env, seed):
     return region
 
 
+# unchanged from mpc_obs_functions
 def construct_environment_blocks(bound):
     block_base = 3 * np.array([[0,0], [0,1], [1,1], [1,0]])
 
@@ -48,6 +50,7 @@ def construct_environment_blocks(bound):
     env = Environment(obstacles, [[-bound, -bound], [bound, bound]])
     return env
 
+# unchanged from mpc_obs_functions
 def construct_environment_forest(bound):
 
 
@@ -69,6 +72,7 @@ def construct_environment_forest(bound):
     env = Environment(obstacles, [[-bound, -bound], [bound, bound]])
     return env
 
+# unchanged from mpc_obs_functions
 def construct_ellipse_space(env):
 
     shapely_obstacles = [geometry.Polygon(o) for o in env.obstacles]
@@ -180,6 +184,7 @@ env =construct_environment_forest(15)
 
 region_list, M_list, C_list, center_list = construct_ellipse_space(env)
 ellipse_graph = construct_ellipse_topology(M_list, center_list)
+ellipse_graph[ellipse_graph < np.inf] = 1
 plt.imshow(ellipse_graph)
 plt.show()
 

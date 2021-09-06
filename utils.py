@@ -223,3 +223,29 @@ def ellipsoids_intersect(A, B, a, b):
 #    return (res.fun >= 0)
 
 
+
+def greedy_center_selection(g, k):
+    n = len(g)
+    centers = [np.random.randint(0, n)]
+
+    while len(centers) < k:
+        center_vector = np.array(centers)
+        dists = g[center_vector,:]
+        print(dists)
+        #dists[:,np.array(centers)] = 0
+        maxdists = np.min(dists, axis=0)
+        #if len(centers) > 1:
+        #    maxdists = np.min(dists, axis=0)
+        #else:
+        #    maxdists = dists.squeeze()
+        print(maxdists)
+        #dists[:,np.array(centers)] = 0
+        new_center = np.argmax(maxdists)
+        print(new_center)
+        centers.append(new_center)
+
+    center_vector = np.array(centers)
+    dists = g[center_vector,:]
+    assignments = np.argmin(dists, axis=0)
+    return centers, assignments
+

@@ -4,6 +4,13 @@ import numpy as np
 import casadi as cd
 
 
+def update_targets(agents, dt):
+    for t in agents.agent_list:
+        state = t.unicycle_state
+        state[3:5] = t.control[:2]
+        state_new = step(state, np.zeros(t.control.shape), t.params, dt, mpcc=True)
+        t.unicycle_state[:] = state_new
+
 def update_agents(agents, dt):
     for t in agents.agent_list:
         state_new = step(t.unicycle_state, t.control, t.params, dt, mpcc=True)

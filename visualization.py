@@ -11,6 +11,7 @@ def cxt_to_artists(targets, trackers):
     artists = []
     artists += targets.target_scatter_list
     artists += targets.target_fov_list
+    artists += targets.target_wp_list
     artists += trackers.tracker_scatter_list
     artists += trackers.track_list
     artists += trackers.traj_plots
@@ -22,6 +23,7 @@ class TargetPlotCxt:
     def __init__(self):
         self.target_scatter_list = []
         self.target_fov_list = []
+        self.target_wp_list = []
 
 
 class TrackerPlotCxt:
@@ -124,8 +126,11 @@ def initial_plot_target_group(ax, group):
         patch = patches.Polygon(tri_corners, closed=True, fc='r', ec='r', alpha=0.2)
         ax.add_patch(patch)
         cxt.target_fov_list.append(patch)
-    ax.set_xlim([-10,10])
-    ax.set_ylim([-10,10])
+
+        l = ax.scatter([0],[0], color='k')
+        cxt.target_wp_list.append(l)
+    ax.set_xlim([-15,15])
+    ax.set_ylim([-15,15])
 
     return cxt
 
@@ -173,9 +178,15 @@ def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp_orde
 
 
 def update_plot_target_group(group, cxt):
+    #print('\n\n===========')
     for (ix, t) in enumerate(group.agent_list):
         cxt.target_scatter_list[ix].set_offsets(t.position[:-1])
 
         tri_corners = generate_triangle_pts(t)
         cxt.target_fov_list[ix].set_xy(tri_corners)
 
+        cxt.target_wp_list[ix].set_offsets(t.waypoints[0])
+        #print('t.waypoints[0]: ', t.waypoints[0])
+        #cxt.target_wp_list[ix].set_offsets(np.array([3,3]))
+
+    #print('\n\n===========')

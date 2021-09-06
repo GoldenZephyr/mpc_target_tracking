@@ -1,4 +1,5 @@
 import numpy as np
+from shapely import geometry
 
 class Environment:
     def __init__(self, obstacles, bounds):
@@ -7,6 +8,8 @@ class Environment:
         """
         self.obstacles = obstacles
         self.bounds = bounds
+        self.shapely_obstacles = [geometry.Polygon(o) for o in obstacles]
+
 
         #self.centers = np.array([np.mean(verts, axis=0) for verts in obstacles])
         self.centers = []
