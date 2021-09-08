@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 from environment import Environment
-from scipy.sparse.csgraph import shortest_path
+from scipy.sparse.csgraph import shortest_path, connected_components
 from scipy.optimize import minimize_scalar
 from scipy.spatial import ConvexHull
 from shapely import geometry
@@ -57,11 +57,11 @@ def construct_environment_forest(bound):
     # we do this so that the randomness to generate this environment
     # is decoupled from other randomness
     rng_state = np.random.get_state()
-    np.random.seed(3)
+    np.random.seed(4)
     thetas = np.linspace(0,2*np.pi, 12)
     unit_circle = np.array([np.cos(thetas), np.sin(thetas)]).T
     obstacles = []
-    for ix in range(20):
+    for ix in range(30):
         center = 30 * (np.random.random(2) - 0.5)
         radius = 3 * np.random.random()
         obs = radius*unit_circle + center
@@ -97,6 +97,7 @@ def construct_ellipse_space(env):
 
     while(any(needed_points)):
         first_ix = np.argmax(needed_points)
+        print(first_ix)
         needed_points[first_ix] = False
         point_in_obstacle = [o.contains(shapely_points[first_ix]) for o in shapely_obstacles]
         if any(point_in_obstacle):
@@ -184,7 +185,6 @@ env =construct_environment_forest(15)
 
 region_list, M_list, C_list, center_list = construct_ellipse_space(env)
 ellipse_graph = construct_ellipse_topology(M_list, center_list)
-ellipse_graph[ellipse_graph < np.inf] = 1
 plt.imshow(ellipse_graph)
 plt.show()
 
@@ -202,7 +202,7 @@ eg2 = np.copy(ellipse_graph)
 #            eg2[jx, ix] = D[ix, jx]
 
 
-centers, assignments = greedy_center_selection(D, 6)
+centers, assignments = greedy_center_selection(D, 4)
 
 fig, ax = plt.subplots()
 t = np.linspace(0, 2*np.pi + .1, 25)
@@ -211,17 +211,17 @@ x = np.array([np.cos(t), np.sin(t)])
 
 patches = []
 colors = ['r', 'g', 'b', 'c', 'm', 'y']
-alpha = 1
+alpha = .2
 for ix in range(len(C_list)):
     C = C_list[ix]
     d = center_list[ix]
     y = C @ x + d[:, None]
-    polygon = Polygon(y.T, False, ec=None, fc=colors[assignments[ix]], alpha=1)
+    polygon = Polygon(y.T, False, ec=None, fc=colors[assignments[ix]], alpha=alpha)
     #ax.add_patch(polygon)
 
     poly_pts = region_list[ix].getPolyhedron().getDrawingVertices()
     hull = ConvexHull(poly_pts)
-    poly2 = Polygon(poly_pts[hull.vertices], True, fc=colors[assignments[ix]], fill=True, alpha=1)
+    poly2 = Polygon(poly_pts[hull.vertices], True, fc=colors[assignments[ix]], fill=True, alpha=alpha)
     ax.add_patch(poly2)
     #patches.append(polygon)
     xv = y[0, :]
@@ -230,7 +230,7 @@ for ix in range(len(C_list)):
 
 #ax.add_collection(PatchCollection(patches))
 for c in centers:
-    plt.scatter(center_list[c][0], center_list[c][1])
+    plt.scatter(center_list[c][0], center_list[c][1], color='k', zorder=100)
 
 EnvironmentPlotCxt(ax, env, [], [])
 plt.show()

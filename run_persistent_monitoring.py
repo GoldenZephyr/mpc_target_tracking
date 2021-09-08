@@ -24,9 +24,12 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--n_targets', type=int, required=True, help='Number of target agents')
 parser.add_argument('--n_trackers', type=int, required=True, help='Number of tracker agents')
-parser.add_argument('--hlp_type', type=str, required=True, help='Type of high level planning to use. Choose from {ellipsoids, no_decomposition, no_decomposition_obsaware}')
+parser.add_argument('--hlp_type', type=str, required=True, help='Type of high level planning to use. Choose from {ellipsoids, no_decomposition, no_decomposition_obsaware, static_voronoi}')
 parser.add_argument('--env_type', type=str, required=True, help='Environment type. Choose from {blocks, forest}')
 parser.add_argument('--n_steps', type=int, required=True, help='Number of simulation steps')
+
+parser.add_argument('--env_seed', type=int,  default=3, help='Random seed for Environment. Currently used only with forest environment')
+parser.add_argument('--log', action='store_true', help='Turn on logging')
 
 parser.add_argument('--plot_mode', type=str, help='Plotting mode {show, save, none}')
 parser.add_argument('--animation_name', type=str, help='Name of saved animation (only useful if plot_mode is save')
@@ -41,7 +44,7 @@ assignment_type = None # deprecated
 #HLP_TYPE = 'no_decomposition'
 #HLP_TYPE = 'ellipsoids'
 HLP_TYPE = args.hlp_type
-if HLP_TYPE not in ['ellipsoids', 'no_decomposition', 'no_decomposition_obsaware']:
+if HLP_TYPE not in ['ellipsoids', 'no_decomposition', 'no_decomposition_obsaware', 'static_voronoi']:
     raise Exception('Error, invalid HLP_TYPE')
 #env_type = 'blocks'
 env_type = args.env_type
@@ -62,7 +65,7 @@ trackers.synchronize_state()
 if env_type == 'blocks':
     env = construct_environment_blocks(15)
 elif env_type == 'forest':
-    env = construct_environment_forest(15)
+    env = construct_environment_forest(15, seed=args.env_seed)
 
 region_list, M_list, C_list, center_list = construct_ellipse_space(env)
 ellipse_graph = construct_ellipse_topology(M_list, center_list)
@@ -78,6 +81,8 @@ for (ix, t) in enumerate(trackers.agent_list):
     print(decomposition_center)
     t.unicycle_state[:2] = decomposition_center
 trackers.synchronize_state()
+
+centroids_for_voronoi = [center_list[ix] for ix in decomposition_centers_ix]
 
 if not args.plot_mode == 'none':
     fig, ax = plt.subplots()
@@ -142,8 +147,6 @@ def check_visited_view(tracker, target):
         return True
     else:
         return False
-
-
 
 
 def resample_target_goal(initial_position, env):
@@ -349,6 +352,20 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, time_si
     return w0, assignments, [ell1_ix, ell2_ix]
 
 
+def divide_targets_static_voronoi(targets, trackers):
+
+    target_to_tracker = np.array([np.argmin([np.linalg.norm(targets.agent_list[ix].state[:2] - centroids_for_voronoi[jx]) for jx in range(len(trackers.agent_list))]) for ix in range(n_targets)])
+    targets_per_tracker = [[jx for jx in np.where(target_to_tracker == ix)[0]] for ix in range(n_trackers)] # list of targets for each 
+    n_per_tracker = [len(t) for t in targets_per_tracker]
+    # if some trackers have no local targets, pursue a target that is closer to a different tracker
+    if max(n_per_tracker) > 0:
+        for ix in range(len(targets_per_tracker)):
+            if len(targets_per_tracker[ix]) == 0:
+                target_dists = [np.linalg.norm(targets.agent_list[jx].state[:2] - trackers.agent_list[ix].state[:2]) for jx in range(n_targets)]
+                targets_per_tracker[ix] = [np.argmin(target_dists)]
+    return targets_per_tracker
+
+
 
 def divide_targets_nodecomposition_obsaware(targets, trackers):
     positions_to_visit = targets.pose[:, :2]
@@ -403,16 +420,22 @@ weights_1 = cd.DM.ones(40)
 weights_2 = cd.DM.zeros(40)
 
 time_since_visited_list = np.zeros(n_targets)
-log_filename = 'logs/%s_%s_%d_trackers_%d_targets_%f.txt' % (env_type, HLP_TYPE, n_trackers, n_targets, time.time())
-time_visited_log = open(log_filename, 'w')
+if args.log:
+    if args.env_type == 'forest':
+        env_name = 'forest' + str(args.env_seed)
+    else:
+        env_name = args.env_type
+    log_filename = 'logs/%s_%s_%d_trackers_%d_targets_%f.txt' % (env_name, HLP_TYPE, n_trackers, n_targets, time.time())
+    time_visited_log = open(log_filename, 'w')
 
 def update(i):
     global current_target_indices, w0, switch_ix, assignment_ix, time_since_visited_list
     print('Current Time Index: ', i)
     print(time_since_visited_list)
 
-    line_to_write = (('%d,'*n_targets)[:-1] + '\n') % tuple(time_since_visited_list.tolist())
-    time_visited_log.write(line_to_write)
+    if args.log:
+        line_to_write = (('%d,'*n_targets)[:-1] + '\n') % tuple(time_since_visited_list.tolist())
+        time_visited_log.write(line_to_write)
 
     time_since_visited_list += 1
 
@@ -423,7 +446,7 @@ def update(i):
         targets_per_tracker = divide_targets_nodecomposition_obsaware(targets, trackers)
     elif HLP_TYPE == 'static_voronoi':
         # do an initial, static, obstacle-unaware voronoi decomposition
-        raise NotImplementedError('static voronoi not implemented')
+        targets_per_tracker = divide_targets_static_voronoi(targets, trackers)
     elif HLP_TYPE == 'ellipsoids':
         targets_per_tracker = divide_targets_ellipsoid(targets, ellipsoids_per_tracker)
     else:
