@@ -353,7 +353,7 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, time_si
 def divide_targets_nodecomposition_obsaware(targets, trackers):
     positions_to_visit = targets.pose[:, :2]
 
-    target_to_tracker = np.array([np.argmin([find_ellipsoid_path_weighted(ellipse_graph_weighted, M_list, center_list, trackers.agent_list[jx].state[:2], targets.agent_list[ix].state[:2]) for jx in range(len(trackers.agent_list))]) for ix in range(n_targets)])
+    target_to_tracker = np.array([np.argmin([find_ellipsoid_path_weighted(ellipse_graph_weighted, M_list, center_list, trackers.agent_list[jx].state[:2], targets.agent_list[ix].state[:2])[-1] for jx in range(len(trackers.agent_list))]) for ix in range(n_targets)])
 
     targets_per_tracker = [[jx for jx in np.where(target_to_tracker == ix)[0]] for ix in range(n_trackers)] # list of targets for each 
     n_per_tracker = [len(t) for t in targets_per_tracker]
