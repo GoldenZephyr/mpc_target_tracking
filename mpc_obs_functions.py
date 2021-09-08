@@ -3,7 +3,9 @@ import random
 from shapely import geometry
 from utils import call_irispy, ellipsoids_intersect, find_ellipse_intersection
 from scipy.sparse.csgraph import shortest_path, connected_components
+from scipy.spatial import ConvexHull
 from environment import Environment
+import pickle
 
 def sample_tracker_positions(M_list, center_list, n_trackers, sample_bound):
     positions = []
@@ -49,6 +51,15 @@ def construct_environment_blocks(bound):
 
     env = Environment(obstacles, [[-bound, -bound], [bound, bound]])
     return env
+
+def construct_environment_custom(fn):
+    with open(fn, 'rb') as fo:
+        obstacles = pickle.load(fo)
+    obstacles = [o[ConvexHull(o).vertices] for o in obstacles]
+    bound = 15
+    env = Environment(obstacles, [[-bound, -bound], [bound, bound]])
+    return env
+
 
 def construct_environment_forest(bound, seed=3):
 

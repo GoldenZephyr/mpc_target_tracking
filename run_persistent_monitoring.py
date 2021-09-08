@@ -25,7 +25,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--n_targets', type=int, required=True, help='Number of target agents')
 parser.add_argument('--n_trackers', type=int, required=True, help='Number of tracker agents')
 parser.add_argument('--hlp_type', type=str, required=True, help='Type of high level planning to use. Choose from {ellipsoids, no_decomposition, no_decomposition_obsaware, static_voronoi}')
-parser.add_argument('--env_type', type=str, required=True, help='Environment type. Choose from {blocks, forest}')
+parser.add_argument('--env_type', type=str, required=True, help='Environment type. Choose from {blocks, forest, <custom path>}')
 parser.add_argument('--n_steps', type=int, required=True, help='Number of simulation steps')
 
 parser.add_argument('--env_seed', type=int,  default=3, help='Random seed for Environment. Currently used only with forest environment')
@@ -66,6 +66,8 @@ if env_type == 'blocks':
     env = construct_environment_blocks(15)
 elif env_type == 'forest':
     env = construct_environment_forest(15, seed=args.env_seed)
+else:
+    env = construct_environment_custom(env_type)
 
 region_list, M_list, C_list, center_list = construct_ellipse_space(env)
 ellipse_graph = construct_ellipse_topology(M_list, center_list)
@@ -250,8 +252,10 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, time_si
         #target_positions = targets.agent_list[targets_responsible]
         target_positions = targets.state[targets_responsible,:2]
         visit_staleness = time_since_visited[targets_responsible]
-        #distances = np.linalg.norm(target_positions - tracker.state[:2], axis=1) # l2 distance
-        distances = [find_ellipsoid_path_weighted(ellipse_graph_weighted, M_list, center_list, tracker.state[:2], target_positions[ix])[-1] for ix in range(len(target_positions))] # obstacle-aware distance
+        if args.hlp_type in ['no_decomposition', 'static_voronoi']:
+            distances = np.linalg.norm(target_positions - tracker.state[:2], axis=1) # l2 distance
+        else:
+            distances = [find_ellipsoid_path_weighted(ellipse_graph_weighted, M_list, center_list, tracker.state[:2], target_positions[ix])[-1] for ix in range(len(target_positions))] # obstacle-aware distance
 
         staleness_weight = 1
         visit_costs = distances - staleness_weight * visit_staleness
@@ -423,9 +427,11 @@ time_since_visited_list = np.zeros(n_targets)
 if args.log:
     if args.env_type == 'forest':
         env_name = 'forest' + str(args.env_seed)
-    else:
+    elif args.env_type == 'blocks':
         env_name = args.env_type
-    log_filename = 'logs/%s_%s_%d_trackers_%d_targets_%f.txt' % (env_name, HLP_TYPE, n_trackers, n_targets, time.time())
+    else:
+        env_name = args.env_type.split('/')[-1].split('.')[0]
+    log_filename = 'logs_v2/%s_%s_%d_trackers_%d_targets_%f.txt' % (env_name, HLP_TYPE, n_trackers, n_targets, time.time())
     time_visited_log = open(log_filename, 'w')
 
 def update(i):

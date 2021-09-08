@@ -11,6 +11,8 @@ from scipy.spatial import ConvexHull
 from shapely import geometry
 import irispy
 from visualization import EnvironmentPlotCxt
+import pickle
+from scipy.spatial import ConvexHull
 
 # unchanged from utils
 def K_full(s, v, A_inv, B_inv):
@@ -72,6 +74,14 @@ def construct_environment_forest(bound):
     env = Environment(obstacles, [[-bound, -bound], [bound, bound]])
     return env
 
+def construct_environment_custom(fn):
+    with open(fn, 'rb') as fo:
+        obstacles = pickle.load(fo)
+    obstacles = [o[ConvexHull(o).vertices] for o in obstacles]
+    bound = 15
+    env = Environment(obstacles, [[-bound, -bound], [bound, bound]])
+    return env
+
 # unchanged from mpc_obs_functions
 def construct_ellipse_space(env):
 
@@ -103,7 +113,10 @@ def construct_ellipse_space(env):
         if any(point_in_obstacle):
             continue
         seed_point = vals[first_ix]
-        region = call_irispy(env, seed_point)
+        try:
+            region = call_irispy(env, seed_point)
+        except:
+            continue
         d = region.ellipsoid.getD()
         c = region.ellipsoid.getC()
         c_inv = np.linalg.inv(c)
@@ -181,10 +194,12 @@ def greedy_center_selection(g, k):
 
 
 #env =construct_environment_blocks(15)
-env =construct_environment_forest(15)
+#env =construct_environment_forest(15)
+env = construct_environment_custom('environments/custom1.pkl')
 
 region_list, M_list, C_list, center_list = construct_ellipse_space(env)
 ellipse_graph = construct_ellipse_topology(M_list, center_list)
+
 plt.imshow(ellipse_graph)
 plt.show()
 
@@ -205,7 +220,7 @@ eg2 = np.copy(ellipse_graph)
 centers, assignments = greedy_center_selection(D, 4)
 
 fig, ax = plt.subplots()
-t = np.linspace(0, 2*np.pi + .1, 25)
+t = np.linspace(0, 2*np.pi + .1, 100)
 x = np.array([np.cos(t), np.sin(t)])
 
 
@@ -217,12 +232,12 @@ for ix in range(len(C_list)):
     d = center_list[ix]
     y = C @ x + d[:, None]
     polygon = Polygon(y.T, False, ec=None, fc=colors[assignments[ix]], alpha=alpha)
-    #ax.add_patch(polygon)
+    ax.add_patch(polygon)
 
     poly_pts = region_list[ix].getPolyhedron().getDrawingVertices()
     hull = ConvexHull(poly_pts)
     poly2 = Polygon(poly_pts[hull.vertices], True, fc=colors[assignments[ix]], fill=True, alpha=alpha)
-    ax.add_patch(poly2)
+    #ax.add_patch(poly2)
     #patches.append(polygon)
     xv = y[0, :]
     yv = y[1, :]
