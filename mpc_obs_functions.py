@@ -56,12 +56,12 @@ def construct_environment_forest(bound):
     # we do this so that the randomness to generate this environment
     # is decoupled from other randomness
     rng_state = np.random.get_state()
-    np.random.seed(2)
+    np.random.seed(3)
     thetas = np.linspace(0,2*np.pi, 12)
     unit_circle = np.array([np.cos(thetas), np.sin(thetas)]).T
     obstacles = []
     for ix in range(20):
-        center = 20 * (np.random.random(2) - 0.5)
+        center = 30 * (np.random.random(2) - 0.5)
         radius = 3 * np.random.random()
         obs = radius*unit_circle + center
         obstacles.append(obs)
