@@ -3,6 +3,7 @@ from dynamics import step, unicycle_ddt
 from scipy.optimize import minimize_scalar
 from scipy.linalg import eigh
 import irispy
+import params as P
 
 def constrain_velocity(vel_desired, p0, A, a):
     speed_desired = np.linalg.norm(vel_desired)
@@ -166,9 +167,9 @@ def update_switch_waypoint(target_traj, traj, switch_ix):
     pos_diff = pos - target_pos
     dists = np.linalg.norm(pos_diff, axis=1)
     
-    new_ix = np.argmax(dists < .5)
+    new_ix = np.argmax(dists < P.waypoint_switch_tolerance)
     if new_ix == 0:
-        return min(switch_ix + 3, 39)
+        return min(switch_ix + 3, P.mpc_horizon_length - 1)
     else:
         return new_ix + 1 # +1 is just a little buffer, not technically necessary
 
@@ -187,7 +188,7 @@ def update_switch_viewpoint(target_traj, traj, switch_ix):
     cos_theta = np.sum(pos_diff_heading * target_heading, axis=1)
     new_ix = np.argmax(cos_theta > np.sqrt(3)/2.0)
     if new_ix == 0:
-        return min(switch_ix + 3, 39)
+        return min(switch_ix + 3, P.mpc_horizon_length - 1)
     else:
         return new_ix + 1 # +1 is just a little buffer, not technically necessary
 

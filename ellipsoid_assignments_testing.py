@@ -57,12 +57,12 @@ def construct_environment_forest(bound):
     # we do this so that the randomness to generate this environment
     # is decoupled from other randomness
     rng_state = np.random.get_state()
-    np.random.seed(2)
+    np.random.seed(3)
     thetas = np.linspace(0,2*np.pi, 12)
     unit_circle = np.array([np.cos(thetas), np.sin(thetas)]).T
     obstacles = []
     for ix in range(20):
-        center = 20 * (np.random.random(2) - 0.5)
+        center = 30 * (np.random.random(2) - 0.5)
         radius = 3 * np.random.random()
         obs = radius*unit_circle + center
         obstacles.append(obs)
@@ -202,7 +202,7 @@ eg2 = np.copy(ellipse_graph)
 #            eg2[jx, ix] = D[ix, jx]
 
 
-centers, assignments = greedy_center_selection(D, 4)
+centers, assignments = greedy_center_selection(D, 6)
 
 fig, ax = plt.subplots()
 t = np.linspace(0, 2*np.pi + .1, 25)
@@ -210,17 +210,18 @@ x = np.array([np.cos(t), np.sin(t)])
 
 
 patches = []
-colors = ['r', 'g', 'b', 'c']
+colors = ['r', 'g', 'b', 'c', 'm', 'y']
+alpha = 1
 for ix in range(len(C_list)):
     C = C_list[ix]
     d = center_list[ix]
     y = C @ x + d[:, None]
-    polygon = Polygon(y.T, False, ec=None, fc=colors[assignments[ix]], alpha=0.2)
+    polygon = Polygon(y.T, False, ec=None, fc=colors[assignments[ix]], alpha=1)
     #ax.add_patch(polygon)
 
     poly_pts = region_list[ix].getPolyhedron().getDrawingVertices()
     hull = ConvexHull(poly_pts)
-    poly2 = Polygon(poly_pts[hull.vertices], True, fc=colors[assignments[ix]], fill=True, alpha=0.2)
+    poly2 = Polygon(poly_pts[hull.vertices], True, fc=colors[assignments[ix]], fill=True, alpha=1)
     ax.add_patch(poly2)
     #patches.append(polygon)
     xv = y[0, :]

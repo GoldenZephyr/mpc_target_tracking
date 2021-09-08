@@ -19,33 +19,46 @@ from visualization import initial_plot_target_group, update_plot_target_group, i
 from dynamics import update_agents, step, update_targets
 
 from mpc_obs_functions import *
+import argparse
 
-do_plots = True
-no_video = False
-n_targets = 15
-n_trackers = 3
-assignment_type = 'MobileVoronoi'
-controller_type = 'MPC'
+parser = argparse.ArgumentParser()
+parser.add_argument('--n_targets', type=int, required=True, help='Number of target agents')
+parser.add_argument('--n_trackers', type=int, required=True, help='Number of tracker agents')
+parser.add_argument('--hlp_type', type=str, required=True, help='Type of high level planning to use. Choose from {ellipsoids, no_decomposition, no_decomposition_obsaware}')
+parser.add_argument('--env_type', type=str, required=True, help='Environment type. Choose from {blocks, forest}')
+parser.add_argument('--n_steps', type=int, required=True, help='Number of simulation steps')
+
+parser.add_argument('--plot_mode', type=str, help='Plotting mode {show, save, none}')
+parser.add_argument('--animation_name', type=str, help='Name of saved animation (only useful if plot_mode is save')
+
+args = parser.parse_args()
+
+n_targets = args.n_targets
+n_trackers = args.n_trackers
+#assignment_type = 'MobileVoronoi'
+assignment_type = None # deprecated
+#controller_type = 'MPC'
 #HLP_TYPE = 'no_decomposition'
-HLP_TYPE = 'ellipsoids'
-env_type = 'blocks'
+#HLP_TYPE = 'ellipsoids'
+HLP_TYPE = args.hlp_type
+if HLP_TYPE not in ['ellipsoids', 'no_decomposition', 'no_decomposition_obsaware']:
+    raise Exception('Error, invalid HLP_TYPE')
+#env_type = 'blocks'
+env_type = args.env_type
 
-keep_going = True
 
-
-solver_comp = cd.nlpsol('solver', 'ipopt', './nlp_iris_2.so', {'print_time':0, 'ipopt.print_level' : 0, 'ipopt.max_cpu_time': 0.2})
+solver_comp = cd.nlpsol('solver', 'ipopt', './nlp_iris_2.so', {'print_time':0, 'ipopt.print_level' : 0, 'ipopt.max_cpu_time': 0.6})
 #solver_comp = cd.nlpsol('solver', 'ipopt', './nlp_iris_2.so', {'ipopt.max_cpu_time': 0.2})
 
 #targets = TargetGroup(n_targets, [-5,-5,-5], [5,5,5])
-targets = AgentGroup(n_targets, [-5,-5,-5], [5,5,5], DefaultTargetParams())
+targets = AgentGroup(n_targets, [-15,-15,-15], [15,15,15], DefaultTargetParams())
 for t in targets.agent_list:
     t.pd_error_last = 0
     t.waypoints = []
 trackers = AgentGroup(n_trackers, [-5,-5,-5], [5,5,5], DefaultTrackerParams())
-trackers.agent_list[0].unicycle_state[0] = -4
+#trackers.agent_list[0].unicycle_state[0] = -4
 trackers.synchronize_state()
 
-#env = construct_environment(10, 10)
 if env_type == 'blocks':
     env = construct_environment_blocks(15)
 elif env_type == 'forest':
@@ -66,12 +79,13 @@ for (ix, t) in enumerate(trackers.agent_list):
     t.unicycle_state[:2] = decomposition_center
 trackers.synchronize_state()
 
-if do_plots:
+if not args.plot_mode == 'none':
     fig, ax = plt.subplots()
     scats = initial_plot_target_group(ax, targets)
     scats_tracker = initial_plot_tracker_group(ax, trackers)
     env_cxt = EnvironmentPlotCxt(ax, env, C_list, center_list)
 
+    # Turn on plotting of assigned regions
     t = np.linspace(0, 2*np.pi + .1, 50)
     x = np.array([np.cos(t), np.sin(t)])
     colors = ['r','g','b','c']
@@ -79,7 +93,8 @@ if do_plots:
         C = C_list[ix]
         d = center_list[ix]
         y = C @ x + d[:, None]
-        poly = Polygon(y.T, False, ec=None, fc=colors[decomposition_assignments[ix]], alpha=0.2)
+        #poly = Polygon(y.T, False, ec=None, fc=colors[decomposition_assignments[ix]], alpha=0.2)
+        poly = Polygon(y.T, False, ec='b', fc='none', alpha=0.2)
         ax.add_patch(poly)
 
 
@@ -132,14 +147,15 @@ def check_visited_view(tracker, target):
 
 
 def resample_target_goal(initial_position, env):
-    global M_list, center_list, ellipse_graph
+    global M_list, center_list, ellipse_graph_weighted
 
     while 1:
         rand_pt = np.random.uniform(low=-15, high=15, size=(2,))
         shapely_pt = geometry.Point(rand_pt)
         point_in_obstacle = [o.contains(shapely_pt) for o in env.shapely_obstacles]
         if not any(point_in_obstacle):
-            _, waypoints, _, _ = find_ellipsoid_path(ellipse_graph, M_list, center_list, initial_position, rand_pt)
+            #_, waypoints, _, _ = find_ellipsoid_path(ellipse_graph, M_list, center_list, initial_position, rand_pt)
+            _, waypoints, _, _,_ = find_ellipsoid_path_weighted(ellipse_graph_weighted, M_list, center_list, initial_position, rand_pt)
             if len(waypoints) > 0:
                 waypoints = np.vstack((waypoints, rand_pt))
             else:
@@ -170,7 +186,8 @@ def navigate_pathlen_1(targets, current_target_ix, next_target_ix, ellipse_graph
     # wp_next is the intersection waypoint of the path to the following assignment
 
     wp_now = predict_target(targets.agent_list[current_target_ix])
-    ellipse_path_next, wp_next, shape_matrices_next, offsets_next = find_ellipsoid_path(ellipse_graph, M_list, center_list, viewpoint_ref, compute_viewpoint_ref(targets.agent_list[next_target_ix]))
+    #ellipse_path_next, wp_next, shape_matrices_next, offsets_next = find_ellipsoid_path(ellipse_graph, M_list, center_list, viewpoint_ref, compute_viewpoint_ref(targets.agent_list[next_target_ix]))
+    ellipse_path_next, wp_next, shape_matrices_next, offsets_next, _ = find_ellipsoid_path_weighted(ellipse_graph_weighted, M_list, center_list, viewpoint_ref, compute_viewpoint_ref(targets.agent_list[next_target_ix]))
     if len(wp_next) > 0:
         wp_next = np.hstack((wp_next[0], [0]))
         B = shape_matrices_next[1]
@@ -230,7 +247,8 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, time_si
         #target_positions = targets.agent_list[targets_responsible]
         target_positions = targets.state[targets_responsible,:2]
         visit_staleness = time_since_visited[targets_responsible]
-        distances = np.linalg.norm(target_positions - tracker.state[:2], axis=1)
+        #distances = np.linalg.norm(target_positions - tracker.state[:2], axis=1) # l2 distance
+        distances = [find_ellipsoid_path_weighted(ellipse_graph_weighted, M_list, center_list, tracker.state[:2], target_positions[ix])[-1] for ix in range(len(target_positions))] # obstacle-aware distance
 
         staleness_weight = 1
         visit_costs = distances - staleness_weight * visit_staleness
@@ -251,7 +269,8 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, time_si
         # For 2 and 3, the weight switchover is determined by l2 distance from waypoint
         # For 1, weight switchover is determined by check_view
         viewpoint_ref = compute_viewpoint_ref(targets.agent_list[current_target_ix])
-        ellipse_path, waypoints, shape_matrices, offsets = find_ellipsoid_path(ellipse_graph, M_list, center_list, tracker.unicycle_state[:2], viewpoint_ref)
+        #ellipse_path, waypoints, shape_matrices, offsets = find_ellipsoid_path(ellipse_graph, M_list, center_list, tracker.unicycle_state[:2], viewpoint_ref)
+        ellipse_path, waypoints, shape_matrices, offsets, _ = find_ellipsoid_path_weighted(ellipse_graph_weighted, M_list, center_list, tracker.unicycle_state[:2], viewpoint_ref)
         pathlen = len(ellipse_path)
 
         if pathlen == 0:
@@ -330,21 +349,34 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, time_si
     return w0, assignments, [ell1_ix, ell2_ix]
 
 
-def divide_targets_nodecomposition(targets, trackers):
+
+def divide_targets_nodecomposition_obsaware(targets, trackers):
     positions_to_visit = targets.pose[:, :2]
-    target_to_tracker = np.array([np.argmin([np.linalg.norm(targets.agent_list[ix].state[:2] - trackers.agent_list[jx].state[:2]) for jx in range(len(trackers.agent_list))]) for ix in range(n_targets)])
+
+    target_to_tracker = np.array([np.argmin([find_ellipsoid_path_weighted(ellipse_graph_weighted, M_list, center_list, trackers.agent_list[jx].state[:2], targets.agent_list[ix].state[:2]) for jx in range(len(trackers.agent_list))]) for ix in range(n_targets)])
 
     targets_per_tracker = [[jx for jx in np.where(target_to_tracker == ix)[0]] for ix in range(n_trackers)] # list of targets for each 
-
     n_per_tracker = [len(t) for t in targets_per_tracker]
-
     # if some trackers have no local targets, pursue a target that is closer to a different tracker
     if max(n_per_tracker) > 0:
         for ix in range(len(targets_per_tracker)):
             if len(targets_per_tracker[ix]) == 0:
                 target_dists = [np.linalg.norm(targets.agent_list[jx].state[:2] - trackers.agent_list[ix].state[:2]) for jx in range(n_targets)]
                 targets_per_tracker[ix] = [np.argmin(target_dists)]
+    return targets_per_tracker
 
+
+def divide_targets_nodecomposition(targets, trackers):
+    positions_to_visit = targets.pose[:, :2]
+    target_to_tracker = np.array([np.argmin([np.linalg.norm(targets.agent_list[ix].state[:2] - trackers.agent_list[jx].state[:2]) for jx in range(len(trackers.agent_list))]) for ix in range(n_targets)])
+    targets_per_tracker = [[jx for jx in np.where(target_to_tracker == ix)[0]] for ix in range(n_trackers)] # list of targets for each 
+    n_per_tracker = [len(t) for t in targets_per_tracker]
+    # if some trackers have no local targets, pursue a target that is closer to a different tracker
+    if max(n_per_tracker) > 0:
+        for ix in range(len(targets_per_tracker)):
+            if len(targets_per_tracker[ix]) == 0:
+                target_dists = [np.linalg.norm(targets.agent_list[jx].state[:2] - trackers.agent_list[ix].state[:2]) for jx in range(n_targets)]
+                targets_per_tracker[ix] = [np.argmin(target_dists)]
     return targets_per_tracker
 
 def divide_targets_ellipsoid(targets, responsible_ellipsoids):
@@ -354,7 +386,7 @@ def divide_targets_ellipsoid(targets, responsible_ellipsoids):
     targets_per_tracker = [[] for _ in range(len(responsible_ellipsoids))]
     for tracker_ix in indices:
         target_ix_list_copy = target_ix_list.copy()
-        for target_ix in target_ix_list_copy:
+        for target_ix in target_ix_list_copy.copy():
             target = targets.agent_list[target_ix]
             tpos = target.unicycle_state[:2]
             for ell in responsible_ellipsoids[tracker_ix]:
@@ -362,7 +394,7 @@ def divide_targets_ellipsoid(targets, responsible_ellipsoids):
                 dist =  (tpos - c) @ M @ (tpos - c)[:,None]
                 if dist < 1.:
                     targets_per_tracker[tracker_ix].append(target_ix)
-                    target_ix_list.remove(target_ix)
+                    target_ix_list_copy.remove(target_ix)
                     break
     return targets_per_tracker
 
@@ -375,7 +407,7 @@ log_filename = 'logs/%s_%s_%d_trackers_%d_targets_%f.txt' % (env_type, HLP_TYPE,
 time_visited_log = open(log_filename, 'w')
 
 def update(i):
-    global current_target_indices, w0, switch_ix, assignment_ix, keep_going, time_since_visited_list
+    global current_target_indices, w0, switch_ix, assignment_ix, time_since_visited_list
     print('Current Time Index: ', i)
     print(time_since_visited_list)
 
@@ -387,6 +419,8 @@ def update(i):
     if HLP_TYPE == 'no_decomposition':
         # "dynamic voronoi"
         targets_per_tracker = divide_targets_nodecomposition(targets, trackers)
+    elif HLP_TYPE == 'no_decomposition_obsaware':
+        targets_per_tracker = divide_targets_nodecomposition_obsaware(targets, trackers)
     elif HLP_TYPE == 'static_voronoi':
         # do an initial, static, obstacle-unaware voronoi decomposition
         raise NotImplementedError('static voronoi not implemented')
@@ -444,7 +478,7 @@ def update(i):
             
 
     # Update plotting
-    if do_plots:
+    if not args.plot_mode == 'none':
         update_plot_target_group(targets, scats)
         update_plot_tracker_group(trackers, trajectories, current_target_indices, targets, assignment_ix, scats_tracker)
         #print('Ellipse indices to plot: ', ellipse_indices)
@@ -453,16 +487,17 @@ def update(i):
         artists = cxt_to_artists(scats, scats_tracker) # need to return the artists so the animation can update
         return artists
 
-if not do_plots:
-    for ix in range(5000):
+if args.plot_mode == 'none':
+    for ix in range(args.n_steps):
         update(ix)
-else:
-    #Writer = animation.writers['ffmpeg']
-    #writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
+elif args.plot_mode == 'show':
     ani = animation.FuncAnimation(fig, update, frames = np.arange(5000), interval=400, blit=False, repeat=False)
     plt.show()
-    #ani = animation.FuncAnimation(fig, update, frames=np.arange(500), blit=True, save_count=3000)
-    #ani.save('videos/persistent.mp4', writer=writer)
+elif args.plot_mode == 'save':
+    Writer = animation.writers['ffmpeg']
+    writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
+    ani = animation.FuncAnimation(fig, update, frames=np.arange(args.n_steps), blit=True, save_count=args.n_steps)
+    ani.save('videos/%s' % args.animation_name, writer=writer)
 
 
 

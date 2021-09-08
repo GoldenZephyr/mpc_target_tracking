@@ -2,7 +2,7 @@ import numpy as np
 import random
 from shapely import geometry
 from utils import call_irispy, ellipsoids_intersect, find_ellipse_intersection
-from scipy.sparse.csgraph import shortest_path
+from scipy.sparse.csgraph import shortest_path, connected_components
 from environment import Environment
 
 def sample_tracker_positions(M_list, center_list, n_trackers, sample_bound):
@@ -178,8 +178,10 @@ def find_ellipses_for_point(M_list, center_list, point):
         #if dist < 1.:
         #    indices.append(ix)
     indices = np.argwhere(distances < 1.)
-    if len(indices) > 0:
+    if indices.ndim > 1 and indices.size > 0:
         return np.squeeze(indices)
+    elif len(indices) > 0:
+        return indices
     else:
         return np.argmin(distances)
 
@@ -207,39 +209,54 @@ def find_ellipsoid_path(graph, M_list, center_list, start, end):
     ellipse_path = get_path(pred, n, n+1)
     ellipse_path = ellipse_path[1:-1]
     ellipse_pairs = [(ellipse_path[ix], ellipse_path[ix+1]) for ix in range(len(ellipse_path) - 1)]
-    print(ellipse_pairs)
     waypoints = np.array([find_ellipse_intersection(M_list[a], M_list[b], center_list[a], center_list[b]) for (a,b) in ellipse_pairs])
     shape_matrices = [M_list[ix] for ix in ellipse_path]
     offsets = [center_list[ix] for ix in ellipse_path]
 
     return ellipse_path, waypoints, shape_matrices, offsets
 
-def find_ellsoid_path_weighted(graph, M_list, center_list, start, end):
+def find_ellipsoid_path_weighted(graph, M_list, center_list, start, end):
     start_ix_list = find_ellipses_for_point(M_list, center_list, start)
     end_ix_list = find_ellipses_for_point(M_list, center_list, end)
+    for s_ix in np.atleast_1d(start_ix_list):
+        if s_ix in np.atleast_1d(end_ix_list):
+            return [s_ix], [], [M_list[s_ix]], [center_list[s_ix]], np.linalg.norm(start - end)
 
-    start_dists = [ (start - center_list[ix]) @ M_list[ix] @ (start - center_list[ix])[:, None] for ix in start_ix_list]
 
-    end_dists = [ (end - center_list[ix]) @ M_list[ix] @ (end - center_list[ix])[:, None] for ix in end_ix_list]
+    # scipy treats edge weight 0 as being disconnected.....
+    eps = 1e-6
+    if start_ix_list.ndim == 0:
+        start_dists = (start - center_list[start_ix_list]) @ M_list[start_ix_list] @ (start - center_list[start_ix_list])[:, None]
+        start_dists = max(start_dists, eps)
+    else:
+        start_dists = np.array([ float((start - center_list[ix]) @ M_list[ix] @ (start - center_list[ix])[:, None]) for ix in start_ix_list])
+        start_dists[start_dists < eps] = eps
+
+    if end_ix_list.ndim == 0:
+        end_dists = (end - center_list[end_ix_list]) @ M_list[end_ix_list] @ (end - center_list[end_ix_list])[:, None]
+        end_dists = max(end_dists, eps)
+    else:
+        end_dists = np.array([ float((end - center_list[ix]) @ M_list[ix] @ (end - center_list[ix])[:, None]) for ix in end_ix_list])
+        end_dists[end_dists < eps] = eps
+    
 
 
     # We augment the ellipse connectivity graph with nodes for the start and end position
     # The connectivity of these 2 nodes is determined by which ellipses they are contained in
     n = graph.shape[0]
-    graph_aug = np.zeros((n+2, n+2))
+    #graph_aug = np.zeros((n+2, n+2))
+    graph_aug = np.inf * np.ones((n+2, n+2))
     graph_aug[:n, :n] = graph
     graph_aug[n, start_ix_list] = start_dists
     graph_aug[start_ix_list, n] = start_dists
     graph_aug[n + 1, end_ix_list] = end_dists
     graph_aug[end_ix_list, n + 1] = end_dists
 
-
     D, pred = shortest_path(graph_aug, directed=False, method='FW', return_predecessors=True)
     shortest_distance = D[n, n+1]
     ellipse_path = get_path(pred, n, n+1)
     ellipse_path = ellipse_path[1:-1]
     ellipse_pairs = [(ellipse_path[ix], ellipse_path[ix+1]) for ix in range(len(ellipse_path) - 1)]
-    print(ellipse_pairs)
     waypoints = np.array([find_ellipse_intersection(M_list[a], M_list[b], center_list[a], center_list[b]) for (a,b) in ellipse_pairs])
     shape_matrices = [M_list[ix] for ix in ellipse_path]
     offsets = [center_list[ix] for ix in ellipse_path]
