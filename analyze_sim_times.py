@@ -54,10 +54,10 @@ def plot_max_timing_comparison(ell_stats, nv_stats, nd_obs_stats, nd_stats, env)
     plt.show()
 
 
-logdir = 'full_logs'
+logdir = 'logs_v2_full'
 files = os.listdir(logdir)
 
-domain_names = ['blocks', 'forest_']
+domain_names = ['blocks', 'forest_', 'custom1']
 
 ellipsoids_files = {}
 no_decomp_obs = {}
@@ -94,9 +94,11 @@ print_stats(no_decomp_stats['forest_'], 'no_decomp', 'forest')
 
 plot_mean_timing_comparison(ellipsoids_stats, static_voronoi_stats, no_decomp_obs_stats, no_decomp_stats, 'blocks')
 plot_mean_timing_comparison(ellipsoids_stats, static_voronoi_stats, no_decomp_obs_stats, no_decomp_stats, 'forest_')
+plot_mean_timing_comparison(ellipsoids_stats, static_voronoi_stats, no_decomp_obs_stats, no_decomp_stats, 'custom1')
 
 plot_max_timing_comparison(ellipsoids_stats, static_voronoi_stats, no_decomp_obs_stats, no_decomp_stats, 'blocks')
 plot_max_timing_comparison(ellipsoids_stats, static_voronoi_stats, no_decomp_obs_stats, no_decomp_stats, 'forest_')
+plot_max_timing_comparison(ellipsoids_stats, static_voronoi_stats, no_decomp_obs_stats, no_decomp_stats, 'custom1')
 
 
 

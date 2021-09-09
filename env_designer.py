@@ -7,6 +7,8 @@ from scipy.spatial import ConvexHull
 import pickle
 import sys
 
+print('Launch as `python3 env_designer.py <output_pickle_path> \n Click to define the convex hull of a polygon.\n Press spacebar to start a new polygon. \nPress delete to undo a clicked point.\nPress s to save the obstacles (and ignore the pyplot save box that appears)')
+
 output_filename = sys.argv[1]
 
 fig = plt.figure()

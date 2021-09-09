@@ -40,7 +40,7 @@ class EnvironmentPlotCxt:
     def __init__(self, ax, env, ellipsoid_shape, ellipsoid_center):
         self.ellipsoid_plots = []
         plot_environment(ax, env)
-        t = np.linspace(0, 2*np.pi + .1, 25)
+        t = np.linspace(0, 2*np.pi + .1, 100)
         x = np.array([np.cos(t), np.sin(t)])
         for ix in range(len(ellipsoid_shape)):
             C = ellipsoid_shape[ix]

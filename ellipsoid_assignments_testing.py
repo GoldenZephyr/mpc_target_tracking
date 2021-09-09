@@ -195,16 +195,20 @@ def greedy_center_selection(g, k):
 
 #env =construct_environment_blocks(15)
 #env =construct_environment_forest(15)
-env = construct_environment_custom('environments/custom1.pkl')
+env = construct_environment_custom('environments/custom2.pkl')
 
 region_list, M_list, C_list, center_list = construct_ellipse_space(env)
 ellipse_graph = construct_ellipse_topology(M_list, center_list)
 
 plt.imshow(ellipse_graph)
+plt.colorbar().set_label(label='Edge Weight', size=18)
+plt.xlabel('Node Index', fontsize=18)
+plt.ylabel('Node Index', fontsize=18)
 plt.show()
 
 fig, ax = plt.subplots()
 env_cxt = EnvironmentPlotCxt(ax, env, C_list, center_list)
+plt.plot([-15, -15, 15, 15, -15], [-15, 15, 15, -15, -15], color='k', linewidth=3)
 plt.show()
 
 D, pred = shortest_path(ellipse_graph, directed=False, method='FW', return_predecessors=True)
@@ -226,7 +230,7 @@ x = np.array([np.cos(t), np.sin(t)])
 
 patches = []
 colors = ['r', 'g', 'b', 'c', 'm', 'y']
-alpha = .2
+alpha = 1
 for ix in range(len(C_list)):
     C = C_list[ix]
     d = center_list[ix]
@@ -248,6 +252,7 @@ for c in centers:
     plt.scatter(center_list[c][0], center_list[c][1], color='k', zorder=100)
 
 EnvironmentPlotCxt(ax, env, [], [])
+plt.plot([-15, -15, 15, 15, -15], [-15, 15, 15, -15, -15], color='k', linewidth=3)
 plt.show()
 
 
