@@ -6,6 +6,7 @@ from scipy.sparse.csgraph import shortest_path, connected_components
 from scipy.spatial import ConvexHull
 from environment import Environment
 import pickle
+import time
 
 def sample_tracker_positions(M_list, center_list, n_trackers, sample_bound):
     positions = []
@@ -106,14 +107,22 @@ def construct_ellipse_space(env):
     center_list = []
     region_list = []
 
+    geo_checking_time = 0
+    time_in_iris = 0
     while(any(needed_points)):
         first_ix = np.argmax(needed_points)
         needed_points[first_ix] = False
+        t0 = time.time()
         point_in_obstacle = [o.contains(shapely_points[first_ix]) for o in shapely_obstacles]
         if any(point_in_obstacle):
+            geo_checking_time += (time.time() - t0)
             continue
+        geo_checking_time += (time.time() - t0)
+
         seed_point = vals[first_ix]
+        t0 = time.time()
         region = call_irispy(env, seed_point)
+        time_in_iris += (time.time() - t0)
         d = region.ellipsoid.getD()
         c = region.ellipsoid.getC()
         c_inv = np.linalg.inv(c)
@@ -129,10 +138,12 @@ def construct_ellipse_space(env):
             if dist < 1 + eps:
                 needed_points[ix] = False
 
+    print('Checking seed points took %f seconds' % geo_checking_time)
+    print('Time in iris %f seconds' % time_in_iris)
     return region_list, M_list, C_list, center_list
 
-
-def construct_ellipse_topology(M_list, center_list):
+#def find_ellipse_intersection(A, B, a, b):
+def construct_ellipse_topology(M_list, center_list, binary_search_intersection=False):
     n = len(M_list)
     graph = np.zeros((n,n))
     for ix in range(n):
@@ -141,9 +152,17 @@ def construct_ellipse_topology(M_list, center_list):
         for jx in range(ix + 1, n):
             B = M_list[jx]
             b = center_list[jx]
-            if ellipsoids_intersect(A, B, a, b):
+            if binary_search_intersection:
+                try:
+                    find_ellipse_intersection(A, B, a, b)
+                except:
+                    continue
                 graph[ix, jx] = 1
                 graph[jx, ix] = 1
+            else:
+                if ellipsoids_intersect(A, B, a, b):
+                    graph[ix, jx] = 1
+                    graph[jx, ix] = 1
 
 
     return graph

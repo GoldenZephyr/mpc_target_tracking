@@ -127,7 +127,8 @@ def initial_plot_target_group(ax, group):
         ax.add_patch(patch)
         cxt.target_fov_list.append(patch)
 
-        l = ax.scatter([0],[0], color='k')
+        #l = ax.scatter([0],[0], color='k')
+        l = ax.scatter([],[], color='k')
         cxt.target_wp_list.append(l)
     ax.set_xlim([-15,15])
     ax.set_ylim([-15,15])
@@ -162,7 +163,7 @@ def update_plot_tracker_group(group, trajectories, index_asgn, targets, tsp_orde
         tsp_pos = targets.pose[tsp_order[ix], :2]
         xs = tsp_pos[:, 0]
         ys = tsp_pos[:, 1]
-        cxt.tsp_plots[ix].set_data(xs, ys)
+        #cxt.tsp_plots[ix].set_data(xs, ys)
 
 
         if mpcc_points is not None:
@@ -185,7 +186,7 @@ def update_plot_target_group(group, cxt):
         tri_corners = generate_triangle_pts(t)
         cxt.target_fov_list[ix].set_xy(tri_corners)
 
-        cxt.target_wp_list[ix].set_offsets(t.waypoints[0])
+        #cxt.target_wp_list[ix].set_offsets(t.waypoints[0])
         #print('t.waypoints[0]: ', t.waypoints[0])
         #cxt.target_wp_list[ix].set_offsets(np.array([3,3]))
 

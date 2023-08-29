@@ -69,11 +69,23 @@ elif env_type == 'forest':
 else:
     env = construct_environment_custom(env_type)
 
+t0 = time.time()
 region_list, M_list, C_list, center_list = construct_ellipse_space(env)
-ellipse_graph = construct_ellipse_topology(M_list, center_list)
-
+print('%d regions' % len(region_list))
+print('Ellipse sampling took %f seconds' % (time.time() - t0))
+t0 = time.time()
+ellipse_graph = construct_ellipse_topology(M_list, center_list, True)
+print('Construct topology took %f seconds' % (time.time() - t0))
+t1 = time.time()
 ellipse_graph_weighted = construct_ellipse_topology_weighted(M_list, center_list)
+print('Weighted graph took %f seconds' % (time.time() - t1))
+t2 = time.time()
 D, pred = shortest_path(ellipse_graph_weighted, directed=False, method='FW', return_predecessors=True)
+print('shortest paths took %f seconds' % (time.time() - t2))
+print('Full Graph building took %f seconds' % (time.time() - t0))
+plt.imshow(ellipse_graph_weighted)
+plt.show()
+abc # delete this if you want to run the rest of it
 decomposition_centers_ix, decomposition_assignments = greedy_center_selection(D, n_trackers)
 ellipsoids_ix_per_tracker = [np.atleast_1d(np.squeeze(np.argwhere(decomposition_assignments == ix))) for ix in np.arange(n_trackers)]
 print(ellipsoids_ix_per_tracker)
@@ -88,21 +100,22 @@ centroids_for_voronoi = [center_list[ix] for ix in decomposition_centers_ix]
 
 if not args.plot_mode == 'none':
     fig, ax = plt.subplots()
+    fig.set_size_inches(1920./300, 1080./300, True)
     scats = initial_plot_target_group(ax, targets)
     scats_tracker = initial_plot_tracker_group(ax, trackers)
     env_cxt = EnvironmentPlotCxt(ax, env, C_list, center_list)
 
     # Turn on plotting of assigned regions
-    t = np.linspace(0, 2*np.pi + .1, 50)
-    x = np.array([np.cos(t), np.sin(t)])
-    colors = ['r','g','b','c']
-    for ix in range(len(C_list)):
-        C = C_list[ix]
-        d = center_list[ix]
-        y = C @ x + d[:, None]
-        #poly = Polygon(y.T, False, ec=None, fc=colors[decomposition_assignments[ix]], alpha=0.2)
-        poly = Polygon(y.T, False, ec='b', fc='none', alpha=0.2)
-        ax.add_patch(poly)
+    #t = np.linspace(0, 2*np.pi + .1, 50)
+    #x = np.array([np.cos(t), np.sin(t)])
+    #colors = ['r','g','b','c']
+    #for ix in range(len(C_list)):
+    #    C = C_list[ix]
+    #    d = center_list[ix]
+    #    y = C @ x + d[:, None]
+    #    #poly = Polygon(y.T, False, ec=None, fc=colors[decomposition_assignments[ix]], alpha=0.2)
+    #    poly = Polygon(y.T, False, ec='b', fc='none', alpha=0.2)
+    #    ax.add_patch(poly)
 
 
 current_target_ix = 0
@@ -324,7 +337,9 @@ def step_tracker(tracker, assignment_type, targets, targets_responsible, time_si
 
         # Solve MPC
         target_prediction = predict_target(targets.agent_list[current_target_ix])
+        t0 = time.time()
         sol = solver_comp(x0=mpc_guess, lbx=lbw, ubx=ubw, lbg=lbg.flatten(), ubg=ubg.flatten(), p=cd.vertcat(tracker.unicycle_state_mpc, wp_now.flatten(), wp_next, weights_1, weights_2, A.flatten(), B.flatten(), a, b, travel_weight))
+        timefile_open.write('%f\n' % (time.time() - t0))
         w0 = sol['x']
 
         controls = np.array(sol['x'][:2]).flatten()
@@ -422,6 +437,8 @@ def divide_targets_ellipsoid(targets, responsible_ellipsoids):
 
 weights_1 = cd.DM.ones(40)
 weights_2 = cd.DM.zeros(40)
+
+timefile_open = open('mpc_timing_info.txt', 'w')
 
 time_since_visited_list = np.zeros(n_targets)
 if args.log:
@@ -526,7 +543,7 @@ elif args.plot_mode == 'save':
     Writer = animation.writers['ffmpeg']
     writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
     ani = animation.FuncAnimation(fig, update, frames=np.arange(args.n_steps), blit=True, save_count=args.n_steps)
-    ani.save('videos/%s' % args.animation_name, writer=writer)
+    ani.save('videos/%s' % args.animation_name, writer=writer, dpi=300)
 
 
 
